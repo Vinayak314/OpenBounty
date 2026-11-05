@@ -4,7 +4,7 @@ import walletWhite from "@/assets/wallet/wallet-white.svg";
 import circleCheck from "@/assets/wallet/circle-check.svg";
 import shieldCheck from "@/assets/wallet/shield-check.svg";
 
-export default function ConnectWalletCard({ account, intro, wallets, trustNote, nextStep }) {
+export default function ConnectWalletCard({ account, intro, wallet, walletLoading, walletBusy, walletError, onConnectWallet, onDisconnectWallet, trustNote, nextStep }) {
   return (
     <section className="flex w-[530px] flex-col items-center gap-4 overflow-hidden rounded-[12px] border border-ob-line bg-white p-7">
       <div className="flex size-12 items-center justify-center rounded-full bg-[#f8fafc]">
@@ -33,16 +33,28 @@ export default function ConnectWalletCard({ account, intro, wallets, trustNote, 
         <img src={circleCheck} alt="" className="size-5 shrink-0" />
       </div>
 
-      {wallets.map((wallet) => (
-        <Link
-          key={wallet.id}
-          to={wallet.href}
-          className="flex h-10 w-full items-center justify-center gap-2 rounded-[8px] border border-ob-navy bg-ob-navy px-4 text-[13px] font-semibold text-white transition-opacity hover:opacity-90"
+      {wallet ? (
+        <div className="flex w-full flex-col gap-2">
+          <div className="flex items-center justify-center gap-2 rounded-[8px] border border-emerald-200 bg-emerald-50 px-4 py-3 text-[12px] font-semibold text-emerald-900">
+            <img src={circleCheck} alt="" className="size-4" />
+            MetaMask connected · {wallet.address.slice(0, 6)}…{wallet.address.slice(-4)}
+          </div>
+          <button type="button" onClick={onDisconnectWallet} disabled={walletBusy} className="self-center text-[11px] text-ob-slate underline disabled:opacity-60">
+            Disconnect from OpenBounty
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={onConnectWallet}
+          disabled={walletLoading || walletBusy}
+          className="flex h-10 w-full items-center justify-center gap-2 rounded-[8px] border border-ob-navy bg-ob-navy px-4 text-[13px] font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-wait disabled:opacity-60"
         >
           <img src={walletWhite} alt="" className="size-[18px]" />
-          {wallet.label}
-        </Link>
-      ))}
+          {walletLoading ? "Loading wallet…" : walletBusy ? "Connecting…" : "Connect MetaMask"}
+        </button>
+      )}
+      {walletError && <p role="alert" className="w-full text-center text-xs text-red-700">{walletError}</p>}
 
       <div className="flex w-full items-start gap-2 rounded-[10px] bg-[#f8fafc] p-[10px]">
         <img src={shieldCheck} alt="" className="size-[18px] shrink-0" />

@@ -27,7 +27,3 @@ export const WALLET_SESSION = {
   footer: "A little clarity. A lot of possibility.  ·  OpenBounty",
 };
 
-// Wallet providers offered on the card. `href` is where the static button navigates.
-export const WALLET_OPTIONS = [
-  { id: "metamask", name: "MetaMask", label: "Connect MetaMask", href: "/dashboard" },
-];

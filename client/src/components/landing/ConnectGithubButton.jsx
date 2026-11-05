@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { GithubAuthProvider, getAdditionalUserInfo, signInWithPopup } from "firebase/auth";
 import github from "@/assets/landing/github.svg";
 import { auth } from "../../../firebase/firebase";
+import { apiRequest } from "@/lib/api";
 
 export default function ConnectGithubButton({ label, large = false }) {
   const navigate = useNavigate();
@@ -19,6 +20,11 @@ export default function ConnectGithubButton({ label, large = false }) {
       if (username) {
         localStorage.setItem(`github-username:${result.user.uid}`, username);
         window.dispatchEvent(new Event("github-identity-updated"));
+        try {
+          await apiRequest("/me/github", { method: "PUT", body: { username } });
+        } catch (syncError) {
+          console.warn("Could not save the GitHub profile to OpenBounty yet:", syncError.message);
+        }
       }
       navigate("/connect");
     } catch (err) {

@@ -11,10 +11,11 @@ import {
   projectEarnings,
   recentBounties,
 } from "@/data/profile";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { GithubAuthProvider, getAdditionalUserInfo, reauthenticateWithPopup } from "firebase/auth";
 import { auth } from "../../firebase/firebase";
 import { useAuth } from "@/auth/AuthContext";
+import { apiRequest } from "@/lib/api";
 import { useGithubProfile } from "@/hooks/useGithubProfile";
 
 export default function ProfilePage() {
@@ -22,6 +23,15 @@ export default function ProfilePage() {
   const { profile: githubProfileData, activity, loading, error, activityError } = useGithubProfile(githubUsername);
   const [reconnecting, setReconnecting] = useState(false);
   const [reconnectError, setReconnectError] = useState("");
+  const [linkedWallet, setLinkedWallet] = useState(null);
+  useEffect(() => {
+    let active = true;
+    apiRequest("/me")
+      .then(({ user }) => { if (active) setLinkedWallet(user.wallet); })
+      .catch(() => {})
+      .finally(() => { active = false; });
+    return () => { active = false; };
+  }, []);
   const accountName = githubProfileData?.name || name;
   const githubProfile = {
     ...profile,
@@ -30,6 +40,12 @@ export default function ProfilePage() {
     avatarUrl: githubProfileData?.avatar_url || photoURL,
     githubUrl: githubProfileData?.html_url || githubUrl,
     bio: githubProfileData?.bio || "No public GitHub bio set.",
+    wallet: linkedWallet ? {
+      ...profile.wallet,
+      address: `${linkedWallet.address.slice(0, 6)}…${linkedWallet.address.slice(-4)}`,
+      fullAddress: linkedWallet.address,
+      provider: "MetaMask · Base connected",
+    } : profile.wallet,
   };
   const stats = [
     { id: "repos", label: "Public repositories", value: githubProfileData?.public_repos ?? "—", caption: "Public GitHub repositories" },
@@ -47,6 +63,11 @@ export default function ProfilePage() {
       if (username) {
         localStorage.setItem(`github-username:${result.user.uid}`, username);
         window.dispatchEvent(new Event("github-identity-updated"));
+        try {
+          await apiRequest("/me/github", { method: "PUT", body: { username } });
+        } catch (syncError) {
+          console.warn("Could not save the GitHub profile to OpenBounty yet:", syncError.message);
+        }
       } else {
         setReconnectError("GitHub did not return a username. Check the OAuth app configuration, then try again.");
       }
