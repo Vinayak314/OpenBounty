@@ -7,7 +7,7 @@ const label = "text-[10px] font-semibold uppercase tracking-[1.5px] text-ob-slat
 
 export default function ProjectSidebar() {
   return (
-    <aside className="flex w-[238px] shrink-0 flex-col border-r border-ob-line bg-[#f8fafc] px-5 pb-[46px] pt-[26px]">
+    <aside className="flex w-[238px] shrink-0 flex-col overflow-y-auto border-r border-ob-line bg-[#f8fafc] px-5 pb-[46px] pt-[26px]">
       <Link to="/" className="flex items-center gap-[10px]">
         <span className="flex size-[34px] items-center justify-center rounded-full bg-ob-mist">
           <Flower2 className="size-[20px] text-ob-navy" strokeWidth={1.6} />

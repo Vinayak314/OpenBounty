@@ -8,7 +8,7 @@ const actionStyles = {
 
 export default function ProjectRail() {
   return (
-    <aside className="w-[338px] shrink-0 border-l border-ob-line px-[18px] pb-6 pt-[22px]">
+    <aside className="w-[338px] shrink-0 overflow-y-auto border-l border-ob-line px-[18px] pb-6 pt-[22px]">
       <h2 className="font-serif text-[24px] leading-tight text-ob-navy">{LEADERBOARD.title}</h2>
       <p className="mt-[14px] text-[10px] text-ob-slate">{LEADERBOARD.subtitle}</p>
       <ol className="mt-[14px] flex flex-col gap-4">
