@@ -2,7 +2,7 @@ const { expect } = require("chai");
 const { ethers } = require("hardhat");
 const { loadFixture, time } = require("@nomicfoundation/hardhat-network-helpers");
 const { anyValue } = require("@nomicfoundation/hardhat-chai-matchers/withArgs");
-const { usdt, id, REVIEWED_SHA, MERGE_REF, REPORT_HASH, mkAuth, mkAttestation } = require("./helpers");
+const { usdt, id, REVIEWED_SHA, MERGE_REF, REPORT_HASH, TYPES, mkAuth, mkAttestation } = require("./helpers");
 
 const Status = { Draft: 0, Funded: 1, Claimed: 2, Submitted: 3, Paid: 4, Refunded: 5 };
 const Reason = { NoActiveClaim: 0, DeadlinePassed: 1, MutualCancellation: 2 };
@@ -355,6 +355,14 @@ describe("BountyEscrow", function () {
       const parsed = ethers.Signature.from(sig); // v/r/s are prototype getters, so they must be copied explicitly
       return { v: parsed.v, r: parsed.r, s: parsed.s, validBefore };
     }
+
+    it("hashTerms equals the independently computed EIP-712 hash of FundingTerms (what a backend uses as the 3009 nonce)", async function () {
+      const ctx = await loadFixture(deploy);
+      const t = await newTerms(ctx);
+      const domain = await require("./helpers").domainFor(ctx.escrow);
+      const expected = ethers.TypedDataEncoder.hash(domain, { FundingTerms: TYPES.FundingTerms }, { ...t, funder: ctx.maint.address });
+      expect(await ctx.escrow.hashTerms(t, ctx.maint.address)).to.equal(expected);
+    });
 
     it("gasless funding: a zero-ETH maintainer funds via a signed EIP-3009 authorization relayed by someone else", async function () {
       const ctx = await loadFixture(deploy);
@@ -804,6 +812,21 @@ describe("BountyEscrow", function () {
         const apprB = await mkAuth(ctx.escrow, ctx.maint, "PayoutApproval", sB);
         await expect(ctx.escrow.settle(sB, attB, apprB)).to.be.revertedWithCustomError(ctx.escrow, "NonceAlreadyUsed");
         expect((await ctx.escrow.getBounty(b.bountyId)).status).to.equal(Status.Submitted);
+      });
+
+      it("both authorizations must come from different keys, even if the attestation signer is rotated onto a payout authority", async function () {
+        const ctx = await loadFixture(deploy);
+        const t = await toSubmitted(ctx);
+        // Misconfiguration / compromise: the signer is rotated onto a maintainer and then onto the owner.
+        for (const key of [ctx.maint, ctx.repoOwner]) {
+          await ctx.escrow.connect(ctx.repoOwner).setAttestationSigner(key.address);
+          await expect(settle(ctx, t, { backend: key, approver: key }))
+            .to.be.revertedWithCustomError(ctx.escrow, "PartiesNotDistinct");
+        }
+        expect((await ctx.escrow.getBounty(t.bountyId)).status).to.equal(Status.Submitted);
+        // A properly separated pair still works afterwards.
+        await ctx.escrow.connect(ctx.repoOwner).setAttestationSigner(ctx.backend.address);
+        await expect(settle(ctx, t)).to.emit(ctx.escrow, "PayoutSettled");
       });
 
       it("a human approval nonce is single-use and the signer can invalidate it before it is relayed", async function () {

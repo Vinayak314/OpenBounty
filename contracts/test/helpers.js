@@ -12,6 +12,16 @@ const REPORT_HASH = id("0g-report-1");
 // EIP-712 type definitions. These are written independently of the Solidity source so that a
 // divergence between the contract's typehashes and what a backend/wallet would sign is caught.
 const TYPES = {
+  // Hash of these terms (with the funder) is the EIP-3009 nonce for fundWithAuthorization.
+  FundingTerms: [
+    { name: "bountyId", type: "bytes32" },
+    { name: "funder", type: "address" },
+    { name: "token", type: "address" },
+    { name: "amount", type: "uint256" },
+    { name: "criteriaHash", type: "bytes32" },
+    { name: "repoRef", type: "bytes32" },
+    { name: "submissionDeadline", type: "uint64" },
+  ],
   AcceptClaim: [
     { name: "bountyId", type: "bytes32" },
     { name: "recipient", type: "address" },

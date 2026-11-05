@@ -525,6 +525,9 @@ contract BountyEscrow is EIP712, Ownable2Step, ReentrancyGuard {
         );
         if (!_canAuthorizePayout(approval.signer)) revert NotPayoutAuthority(approval.signer);
         if (approval.signer == b.recipient) revert SelfPayment();
+        // "Both" must mean two different keys, whatever the owner configures: a signer rotation onto
+        // a payout-authorized key (or the owner) must not let one key satisfy both authorizations.
+        if (approval.signer == attestationSigner) revert PartiesNotDistinct();
 
         // Effects before interaction; status flips first so no path can pay twice.
         b.status = Status.Paid;

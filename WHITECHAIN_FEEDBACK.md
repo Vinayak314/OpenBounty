@@ -19,15 +19,17 @@
 
 - `version()` on the designated USDT reverts, so the EIP-712 domain version had to be recovered by hashing candidate
   domains against `DOMAIN_SEPARATOR()` (it is `"1"`).
-- The docs did not say which EVM version the network targets (we probed opcodes instead) nor how to verify a contract
-  on the explorer (we guessed a Blockscout `customChains` entry, **unconfirmed**).
-- **TODO:** anything hit during real deployment, contract verification, gas sponsorship/account abstraction, or
-  indexing events.
+- The testnet network page does not state the target EVM version; we probed opcodes before finding that the Hardhat
+  deployment page recommends `prague` (solc 0.8.30). A line on the network page would save a detour.
+- The Hardhat deployment/verification page targets Hardhat 3 (`type: "http"`, `hardhatToolboxViem`). Our repo uses
+  Hardhat 2, so the config and verification setup had to be translated and is **untested until we deploy**.
+- **TODO:** anything hit during real deployment, contract verification (Sourcify vs Blockscout), gas
+  sponsorship/account abstraction, or indexing events.
 
 ## What the docs were missing
 
-- EVM version / hardfork support statement for contract authors.
-- A contract-verification how-to for the explorer (API URL, compiler settings, Hardhat/Foundry snippets).
+- The EVM-version recommendation on the network page itself (it exists only on the Hardhat page), and a Hardhat 2 variant
+  of the Hardhat guide.
 - Whether the designated USDT can pause or blacklist addresses, and who administers the proxy, so builders can state
   that risk accurately.
 - A documented, supported path for gas sponsorship / embedded wallets / paymasters on chain 1874 (**TODO:** record what

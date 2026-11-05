@@ -16,6 +16,13 @@ test USDT. Built with Hardhat (the toolchain already used in this folder), Solid
 | Gas token | WBT (test, no value) |
 | Escrow address | `TBD` (placeholder, fill in after deployment, see [Deployed addresses](#deployed-addresses)) |
 
+**Why on-chain stablecoin settlement (ETHGlobal Whitechain README requirement).** A funded bounty reserves the exact
+reward and programmatically restricts release and refunds (one bound claimant, expiry rules, refund rules, a required
+human approval plus a backend attestation) while exposing a shared, verifiable receipt to both parties. A plain transfer
+or a conventional payment rail cannot hold a reward against criteria, lock it from unilateral withdrawal once work is
+submitted, or let funder and contributor audit the same payout record. This secures deposited funds under stated rules;
+it does not guarantee fair review or code quality. (The team-owned root README needs this line too; none exists yet.)
+
 ## Layout
 
 ```
@@ -104,6 +111,9 @@ reportHash`, each plus its own `nonce` and `expiry`/`deadline`. The signed `reci
 equal what is stored on chain; the recipient is never taken from calldata alone. The two EIP-712 primary types differ,
 so one role's signature cannot be replayed as the other's, nor a submission attestation as a settlement attestation.
 
+"Both" is enforced as two **different** keys: `settle` reverts (`PartiesNotDistinct`) if the human approver equals the
+current `attestationSigner`, so rotating the signer onto a maintainer or the owner cannot let one key pay alone.
+
 Replay and double payout: the status flips to `Paid` before the transfer; attestation nonces are single-use per signer;
 approval nonces are single-use per signer (and a signer can burn an unused one with `invalidateNonce`); `claimVersion`
 makes evidence about a superseded claim unusable; the EIP-712 domain binds `chainId` and the escrow address.
@@ -161,8 +171,11 @@ own `DOMAIN_SEPARATOR()`; do not rely on `version()` (it reverts on the live tok
   fails with `invalid signature`, and a caller other than `to` reverts with `to != msg.sender`. The chain executes
   `PUSH0`, `MCOPY` and `TSTORE` (probed), so `evmVersion: cancun` is used.
 * **Not verified:** an actual on-chain `fundWithAuthorization` / settlement transaction against the live token (needs a funded
-  test key and test USDT); explorer verification (the Whitechain docs do not describe a flow; `hardhat.config.js` uses the
-  Blockscout `/api` endpoint as an unconfirmed guess); embedded-wallet / sponsorship provider compatibility.
+  test key and test USDT); explorer verification (the Whitechain Hardhat page documents Sourcify + Blockscout via
+  `npx hardhat verify`, but for Hardhat 3; this repo is on Hardhat 2, so `hardhat.config.js` mirrors it with a Sourcify flag
+  plus our own Blockscout `/api` entry, neither exercised); embedded-wallet / sponsorship provider compatibility.
+* Compiler target: the Whitechain Hardhat page recommends `evmVersion: "prague"` with solc 0.8.30. This repo pins
+  solc 0.8.28 (highest target `cancun`), which is lower and therefore inside that range.
 
 ## Trust boundary
 
@@ -214,7 +227,8 @@ Gas reference from the local suite (not a Whitechain measurement): `fund` ~203k,
 
 ## Sources
 
-Network parameters: <https://docs.whitechain.io/learn/network/testnet>. Viem usage (`whitechainSepolia` in
+Network parameters: <https://docs.whitechain.io/learn/network/testnet>. Hardhat deployment and verification:
+<https://docs.whitechain.io/build/deploy/deploy-with-hardhat>. Viem usage (`whitechainSepolia` in
 `viem/chains`): <https://docs.whitechain.io/build/dapps/use-viem>. Track requirements (designated USDT, explorer
 verification, README line on stablecoin settlement, `WHITECHAIN_FEEDBACK.md`, gasless payer for Scale):
 <https://ethglobal.com/events/mumbai/prizes>. Product spec: `OpenBounty-SRS.md`, `OpenBounty-Project-Overview.md`.

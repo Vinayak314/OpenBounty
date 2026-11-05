@@ -16,8 +16,9 @@ module.exports = {
   solidity: {
     version: "0.8.28",
     settings: {
-      // Whitechain Sepolia executes PUSH0 / MCOPY / TSTORE (probed with eth_call
-      // against https://rpc.testnet.whitechain.io on 2026-11-06), so cancun is safe.
+      // docs.whitechain.io/build/deploy/deploy-with-hardhat recommends evmVersion "prague" (solc >= 0.8.30)
+      // as the highest target that runs on both Whitechain networks. This repo pins solc 0.8.28, whose
+      // highest target is cancun; PUSH0 / MCOPY / TSTORE were also probed with eth_call on the testnet RPC.
       evmVersion: "cancun",
       optimizer: {
         enabled: true,
@@ -48,9 +49,11 @@ module.exports = {
       accounts: deployerAccounts,
     },
   },
-  // The explorer is Blockscout (its Etherscan-compatible /api answers getabi).
-  // The Whitechain docs do not document a verification flow, so this config is
-  // a best-effort guess: confirm with `npx hardhat verify` after the first deploy.
+  // Verification. The Whitechain Hardhat page (written for Hardhat 3) enables Sourcify and runs
+  // `npx hardhat verify --network whitechainSepolia <address>`; its explorer is Blockscout. This repo uses
+  // Hardhat 2 (hardhat-verify v2), so the Sourcify flag below mirrors the docs and the Blockscout
+  // customChains entry is our own addition (its Etherscan-compatible /api answered getabi).
+  // Neither has been exercised yet: confirm with `npx hardhat verify` after the first deploy.
   etherscan: {
     apiKey: {
       whitechainSepolia: ETHERSCAN_API_KEY || "blockscout-does-not-need-a-key",
@@ -66,5 +69,5 @@ module.exports = {
       },
     ],
   },
-  sourcify: { enabled: false },
+  sourcify: { enabled: true },
 };

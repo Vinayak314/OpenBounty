@@ -10,9 +10,10 @@ import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 ///         0xcedfB56113143d55b2358b8CFbB0dEB5Ad2f55a7 and must be used for the track demo
 ///         ("payments in a test token you minted yourself won't count").
 ///         This mock mimics the USDT surface the escrow touches: 6 decimals and the EIP-3009
-///         `receiveWithAuthorization` flow. Its EIP-712 domain ("Tether USD", "1") is an ASSUMPTION
-///         for tests: the live token reverted on `version()`, so off-chain signers must read the
-///         live `DOMAIN_SEPARATOR()` instead of reconstructing it.
+///         `receiveWithAuthorization` flow. Its EIP-712 domain ("Tether USD", "1") was matched
+///         against the live token's `DOMAIN_SEPARATOR()` (chain 1874, verifyingContract = the token
+///         proxy). The live token reverts on `version()`, so off-chain signers should still read
+///         `DOMAIN_SEPARATOR()` rather than reconstructing the domain.
 contract MockUSDT is ERC20, EIP712 {
     bytes32 public constant RECEIVE_WITH_AUTHORIZATION_TYPEHASH = keccak256(
         "ReceiveWithAuthorization(address from,address to,uint256 value,uint256 validAfter,uint256 validBefore,bytes32 nonce)"
