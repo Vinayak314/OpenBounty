@@ -1,5 +1,6 @@
 import Avatar from "./Avatar";
 import { LEADERBOARD, TASKS } from "@/data/project";
+import { useAuth } from "@/auth/AuthContext";
 
 const actionStyles = {
   primary: "bg-ob-navy text-white",
@@ -7,6 +8,7 @@ const actionStyles = {
 };
 
 export default function ProjectRail() {
+  const { name, initials } = useAuth();
   return (
     <aside className="w-[338px] shrink-0 overflow-y-auto border-l border-ob-line px-[18px] pb-6 pt-[22px]">
       <h2 className="font-serif text-[24px] leading-tight text-ob-navy">{LEADERBOARD.title}</h2>
@@ -15,8 +17,8 @@ export default function ProjectRail() {
         {LEADERBOARD.entries.map((e) => (
           <li key={e.rank} className="flex h-[30px] items-center text-[12px] text-ob-navy">
             <span className="w-[22px] text-[10px] text-ob-slate">{e.rank}</span>
-            <Avatar initials={e.initials} color={e.color} size={30} />
-            <span className="ml-[10px]">{e.name}</span>
+            <Avatar initials={e.name === "Ananya Shah" ? initials : e.initials} color={e.color} size={30} />
+            <span className="ml-[10px]">{e.name === "Ananya Shah" ? name : e.name}</span>
             <span className="ml-auto text-[13px] font-semibold">{e.amount}</span>
           </li>
         ))}
@@ -41,7 +43,7 @@ export default function ProjectRail() {
               <span className="rounded-full bg-ob-mist px-[10px] py-[5px] text-[10px] font-semibold text-ob-navy">{t.status}</span>
             </div>
             <p className="mt-[10px] text-[12px] font-semibold text-ob-navy">{t.title}</p>
-            <p className="mt-[10px] text-[10px] text-ob-slate">{t.detail}</p>
+            <p className="mt-[10px] text-[10px] text-ob-slate">{t.detail.replaceAll("Ananya Shah", name)}</p>
             <div className="mt-[10px] flex items-center justify-between">
               <span className="font-serif text-[22px] leading-none text-ob-navy">
                 {t.amount} <span className="font-sans text-[9px] text-ob-slate">USDC</span>

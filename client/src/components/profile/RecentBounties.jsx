@@ -11,6 +11,7 @@ export default function RecentBounties({ data }) {
         <h2 className="font-serif text-xl font-normal text-ob-navy">{data.title}</h2>
         <span className="text-[10px] text-[#94a3b8]">{data.statusLabel}</span>
       </div>
+      {data.items.length === 0 && <p className="text-xs text-ob-slate">Bounty history will appear here when OpenBounty activity is connected.</p>}
       {data.items.map((item) => (
         <div key={item.id} className="contents">
           <Rule />

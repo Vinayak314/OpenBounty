@@ -2,7 +2,10 @@ import { NavLink } from "react-router-dom";
 import { CircleHelp, LayoutDashboard, Sprout, UserRound } from "lucide-react";
 import logoMark from "@/assets/app/logo-mark.svg";
 import { cn } from "@/lib/utils";
-import { currentUser, navItems, sidebarNote } from "@/data/dashboard";
+import { navItems, sidebarNote } from "@/data/dashboard";
+import { useAuth } from "@/auth/AuthContext";
+import { signOut } from "firebase/auth";
+import { auth } from "../../../firebase/firebase";
 import InitialsAvatar from "./InitialsAvatar";
 import { iconProps } from "./icon";
 
@@ -69,6 +72,7 @@ const VARIANTS = {
  */
 export default function AppSidebar({ active, variant = "default", width }) {
   const v = VARIANTS[variant] ?? VARIANTS.default;
+  const { name, handle, initials, photoURL, githubUrl } = useAuth();
 
   return (
     <aside
@@ -135,17 +139,22 @@ export default function AppSidebar({ active, variant = "default", width }) {
         </div>
       )}
 
-      <div className="absolute bottom-7 left-5 right-0 flex flex-col gap-4">
+      <div className="absolute bottom-7 left-5 right-5 flex flex-col gap-4">
         <div className={cn("flex items-center", v.helpGap)}>
           <CircleHelp {...iconProps} size={v.helpIconSize} className={v.helpColor} />
           <span className={cn("text-xs", v.helpColor)}>{v.helpLabel}</span>
         </div>
-        <div className="flex items-center gap-[10px]">
-          <InitialsAvatar initials={currentUser.initials} className={v.avatar} />
-          <div className={cn("flex flex-col leading-[normal]", v.identityGap)}>
-            <span className="text-xs font-semibold text-[#f8fafc]">{currentUser.name}</span>
-            <span className={cn("text-[10px]", v.handleColor)}>{currentUser.handle}</span>
+        <div className="flex min-w-0 items-center gap-[10px]">
+          {githubUrl ? (
+            <a href={githubUrl} target="_blank" rel="noreferrer" aria-label="Open GitHub profile">
+              <InitialsAvatar initials={initials} photoURL={photoURL} className={v.avatar} />
+            </a>
+          ) : <InitialsAvatar initials={initials} photoURL={photoURL} className={v.avatar} />}
+          <div className={cn("flex min-w-0 flex-1 flex-col leading-[normal]", v.identityGap)}>
+            <span title={name} className="truncate text-xs font-semibold text-[#f8fafc]">{name}</span>
+            {githubUrl ? <a title={handle} href={githubUrl} target="_blank" rel="noreferrer" className={cn("truncate text-[10px] hover:underline", v.handleColor)}>{handle}</a> : <span title={handle} className={cn("truncate text-[10px]", v.handleColor)}>{handle}</span>}
           </div>
+          <button type="button" onClick={() => signOut(auth)} className="shrink-0 text-[10px] text-[#cbd5e1] hover:text-white">Sign out</button>
         </div>
       </div>
     </aside>

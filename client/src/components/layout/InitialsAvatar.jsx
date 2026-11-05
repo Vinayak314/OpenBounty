@@ -9,7 +9,10 @@ const TONES = {
  * Round avatar with initials.
  * Props: initials, tone ("orange" | "navy"), className (size + text size).
  */
-export default function InitialsAvatar({ initials, tone = "orange", className }) {
+export default function InitialsAvatar({ initials, photoURL, tone = "orange", className }) {
+  if (photoURL) {
+    return <img src={photoURL} alt="" className={cn("shrink-0 rounded-full object-cover", className)} />;
+  }
   return (
     <span
       className={cn(

@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MESSAGES } from "@/data/project";
+import { useAuth } from "@/auth/AuthContext";
 
 const KEY = "ob-chat-v1:general";
 const SOUND_KEY = "ob-chat-sound";
 
-export const ME = { name: "Ananya Shah", initials: "AS", color: "orange" };
+const ME = { name: "GitHub user", initials: "GH", color: "orange" };
 const AGENT = { name: "Bounty agent", agent: true };
 const TEAMMATES = [
   { name: "Priya Kumar", initials: "PK", color: "navy" },
@@ -73,7 +74,13 @@ function load() {
 }
 
 export function useChat() {
-  const [messages, setMessages] = useState(load);
+  const { name, initials } = useAuth();
+  const currentUser = useMemo(() => ({ ...ME, name, initials }), [name, initials]);
+  const [messages, setMessages] = useState(() => load().map((message) => (
+    message.author?.name === "Ananya Shah"
+      ? { ...message, me: true, author: { ...message.author, name, initials } }
+      : message
+  )));
   const [typing, setTyping] = useState(null);
   const [sound, setSound] = useState(() => safe(() => localStorage.getItem(SOUND_KEY) !== "off", true));
   const timers = useRef([]);
@@ -128,7 +135,7 @@ export function useChat() {
       const id = uid("u");
       setMessages((m) => [
         ...m,
-        { id, type: "message", author: ME, me: true, time: nowLabel(), variant: "outlined", body: text, attachments, replyTo, status: "sending" },
+        { id, type: "message", author: currentUser, me: true, time: nowLabel(), variant: "outlined", body: text, attachments, replyTo, status: "sending" },
       ]);
       later(() => patch(id, { status: "sent" }), 500);
       const toAgent = /@bounty/i.test(agentText);
@@ -140,7 +147,7 @@ export function useChat() {
         converse(who, TEAM_LINES[Math.floor(Math.random() * TEAM_LINES.length)], 3200);
       }
     },
-    [converse, reset],
+    [converse, reset, currentUser],
   );
 
   const edit = useCallback((id, body) => patch(id, { body, edited: true }), []);

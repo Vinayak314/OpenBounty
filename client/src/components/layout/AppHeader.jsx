@@ -1,6 +1,7 @@
 import { Bell } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { appNetwork, currentUser } from "@/data/dashboard";
+import { appNetwork } from "@/data/dashboard";
+import { useAuth } from "@/auth/AuthContext";
 import InitialsAvatar from "./InitialsAvatar";
 import { iconProps } from "./icon";
 
@@ -34,6 +35,7 @@ const VARIANTS = {
  */
 export default function AppHeader({ crumbs, variant = "default" }) {
   const v = VARIANTS[variant] ?? VARIANTS.default;
+  const { initials, photoURL } = useAuth();
 
   return (
     <header className={cn("flex shrink-0 items-center justify-between border-b", v.root)}>
@@ -51,7 +53,7 @@ export default function AppHeader({ crumbs, variant = "default" }) {
         <button type="button" aria-label="Notifications" className={cn("flex", v.bellColor)}>
           <Bell {...iconProps} size={v.bell} />
         </button>
-        <InitialsAvatar initials={currentUser.initials} className={v.avatar} />
+        <InitialsAvatar initials={initials} photoURL={photoURL} className={v.avatar} />
       </div>
     </header>
   );

@@ -1,9 +1,8 @@
-import { cn } from "@/lib/utils";
+// Heat level (0-4) -> increasingly darker blue with visible separation.
+const LEVEL_COLORS = ["#e7edf5", "#b8cbe2", "#7899c3", "#3e6699", "#09244f"];
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-// Heat level (0-3) -> cell colour.
-const LEVEL_COLORS = ["bg-[#f8fafc]", "bg-[#dce5ef]", "bg-[#9bafc9]", "bg-ob-navy"];
-
-/** GitHub-style yearly calendar. `activity` matches contributionActivity in src/data/profile.js. */
+/** GitHub-style full-year contribution grid. */
 export default function ContributionActivity({ activity }) {
   const { legend } = activity;
 
@@ -17,16 +16,20 @@ export default function ContributionActivity({ activity }) {
         <p className="text-[10px] text-[#94a3b8]">{activity.rangeLabel}</p>
       </div>
 
-      <div className="flex flex-col gap-2 overflow-x-auto">
-        <div className="flex min-w-max justify-between pl-[38px] pr-5 text-[9px] leading-[normal] text-[#94a3b8]">
-          {activity.months.map((month) => (
-            <span key={month}>{month}</span>
+      <div className="max-w-full overflow-x-auto">
+        <div className="flex w-fit flex-col gap-2">
+        <div
+          className="relative h-3 text-[9px] leading-[normal] text-[#94a3b8]"
+          style={{ width: `${Math.max(0, activity.weeks.length * 19 - 4)}px`, marginLeft: 38 }}
+        >
+          {activity.months.map(({ label, weekIndex }) => (
+            <span key={`${label}-${weekIndex}`} className="absolute" style={{ left: `${weekIndex * 19}px` }}>{label}</span>
           ))}
         </div>
-        <div className="flex min-w-max gap-[9px]">
-          <div className="flex w-[29px] shrink-0 flex-col gap-[21px] pt-[18px] text-[9px] leading-[normal] text-[#94a3b8]">
-            {activity.weekdayLabels.map((label) => (
-              <span key={label}>{label}</span>
+        <div className="flex gap-[9px]">
+          <div className="grid w-[29px] shrink-0 grid-rows-7 gap-1 text-[9px] leading-[15px] text-[#94a3b8]">
+            {Array.from({ length: 7 }, (_, index) => (
+              <span key={index}>{activity.weekdayLabels.includes(WEEKDAYS[index]) ? WEEKDAYS[index] : ""}</span>
             ))}
           </div>
           <div className="flex gap-1">
@@ -35,7 +38,9 @@ export default function ContributionActivity({ activity }) {
                 {week.map((level, dayIndex) => (
                   <span
                     key={dayIndex}
-                    className={cn("size-[15px] rounded-[3px]", LEVEL_COLORS[level])}
+                    title={activity.dayLabels?.[weekIndex]?.[dayIndex]}
+                    className="size-[15px] rounded-[3px] border border-black/5"
+                    style={{ backgroundColor: LEVEL_COLORS[level] || LEVEL_COLORS[0] }}
                   />
                 ))}
               </div>
@@ -45,9 +50,10 @@ export default function ContributionActivity({ activity }) {
         <div className="flex items-center gap-[5px] text-[9px] leading-[normal] text-[#94a3b8]">
           <span>{legend.less}</span>
           {LEVEL_COLORS.map((color) => (
-            <span key={color} className={cn("size-2.5 rounded-sm", color)} />
+            <span key={color} className="size-2.5 rounded-sm border border-black/10" style={{ backgroundColor: color }} />
           ))}
           <span>{legend.more}</span>
+        </div>
         </div>
       </div>
     </section>

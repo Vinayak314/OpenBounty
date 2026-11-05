@@ -6,6 +6,7 @@ export default function ProjectEarnings({ data }) {
         {data.title}
       </h2>
       <div className="-mt-px h-px w-full bg-ob-line" />
+      {data.items.length === 0 && <p className="text-xs text-ob-slate">Project earnings will appear here when OpenBounty activity is connected.</p>}
       {data.items.map((item) => (
         <div key={item.id} className="flex items-center justify-between whitespace-nowrap leading-[normal]">
           <div className="flex flex-col gap-0.5">

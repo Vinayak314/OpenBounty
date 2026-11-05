@@ -3,9 +3,12 @@ import OnboardingHeader from "@/components/wallet/OnboardingHeader";
 import JourneyProgress from "@/components/wallet/JourneyProgress";
 import ConnectWalletCard from "@/components/wallet/ConnectWalletCard";
 import { WALLET_SESSION, WALLET_OPTIONS } from "@/data/wallet";
+import { useAuth } from "@/auth/AuthContext";
 
 export default function ConnectWalletPage() {
+  const { name, handle, initials } = useAuth();
   const s = WALLET_SESSION;
+  const account = { ...s.account, name, handle, initials };
   return (
     <div className="relative flex min-h-screen flex-col bg-white font-sans leading-[normal] text-ob-navy">
       <img
@@ -19,7 +22,7 @@ export default function ConnectWalletPage() {
         <main className="flex flex-col items-center gap-6 pt-[72px]">
           <JourneyProgress steps={s.steps} />
           <ConnectWalletCard
-            account={s.account}
+            account={account}
             intro={s.intro}
             wallets={WALLET_OPTIONS}
             trustNote={s.trustNote}

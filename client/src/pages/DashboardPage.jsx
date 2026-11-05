@@ -14,9 +14,11 @@ import {
   dashboardProjectsHeader,
   dashboardStats,
 } from "@/data/dashboard";
+import { useAuth } from "@/auth/AuthContext";
 
 // Static design: every list/value below comes from src/data/dashboard.js.
 export default function DashboardPage() {
+  const { name } = useAuth();
   const rows = [];
   for (let i = 0; i < dashboardProjects.length; i += 2) {
     rows.push(dashboardProjects.slice(i, i + 2));
@@ -37,7 +39,7 @@ export default function DashboardPage() {
                 {dashboardGreeting.eyebrow}
               </p>
               <h1 className="font-serif text-[36px] font-normal tracking-[-1px] text-ob-navy">
-                {dashboardGreeting.headline}
+                Good to see you, {name}.
               </h1>
               <p className="text-[13px] text-ob-slate">{dashboardGreeting.subline}</p>
             </div>

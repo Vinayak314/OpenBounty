@@ -2,10 +2,12 @@ import { Link } from "react-router-dom";
 import { ArrowLeft, ArrowUpRight, Flower2, Sparkles } from "lucide-react";
 import Avatar from "./Avatar";
 import { PROJECT, CHANNELS, MEMBER_GROUPS, BOUNTY_THREADS } from "@/data/project";
+import { useAuth } from "@/auth/AuthContext";
 
 const label = "text-[10px] font-semibold uppercase tracking-[1.5px] text-ob-slate";
 
 export default function ProjectSidebar() {
+  const { name, initials } = useAuth();
   return (
     <aside className="flex w-[238px] shrink-0 flex-col overflow-y-auto border-r border-ob-line bg-[#f8fafc] px-5 pb-[46px] pt-[26px]">
       <Link to="/" className="flex items-center gap-[10px]">
@@ -43,9 +45,9 @@ export default function ProjectSidebar() {
           <ul className="mt-[10px] flex flex-col gap-[15px]">
             {group.members.map((m) => (
               <li key={m.id} className="flex items-end gap-[10px]">
-                <Avatar initials={m.initials} color={m.color} size={29} dot />
-                <span className="sr-only">{m.name}</span>
-                {m.role && <span className="pb-[1px] text-[9px] text-[#bfd9c6]">{m.role}</span>}
+                <Avatar initials={m.id === "as" ? initials : m.initials} color={m.color} size={29} dot />
+                <span className="sr-only">{m.id === "as" ? name : m.name}</span>
+                {m.role && <span className="pb-[1px] text-[9px] text-[#bfd9c6]">{m.id === "as" ? "Maintainer · You" : m.role}</span>}
               </li>
             ))}
           </ul>

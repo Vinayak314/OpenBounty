@@ -1,19 +1,14 @@
-import avatarUrl from "@/assets/app/profile-avatar.jpg";
-
-// Static placeholder data for the Profile screen. Shaped like future API
-// responses; swap these constants for fetched data later.
-
 export const profile = {
-  name: "Ananya Shah",
-  handle: "@ananyacodes",
-  bio: "Building a more accessible web, one thoughtful contribution at a time.",
-  avatarUrl,
+  name: "GitHub user",
+  handle: "GitHub account",
+  bio: "No public GitHub bio set.",
+  avatarUrl: "",
   githubConnected: true,
   githubBadgeLabel: "GitHub connected ✓",
   wallet: {
     label: "PAYOUT WALLET · BASE",
-    address: "0x7C3a…9F2d",
-    provider: "MetaMask · Connected",
+    address: "Not connected",
+    provider: "Connect a wallet to receive payouts",
   },
 };
 
@@ -110,4 +105,4 @@ export const projectEarnings = {
   ],
 };
 
-export const profileFootnote = "Illustrative profile · Stats reflect completed payouts.";
+export const profileFootnote = "Public profile details are loaded from GitHub. OpenBounty payout history is not connected yet.";
