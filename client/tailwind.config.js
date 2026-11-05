@@ -4,12 +4,22 @@
     content: ["./index.html", "./src/**/*.{html,js,jsx}"],
   theme: {
   	extend: {
+  		fontFamily: {
+  			sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+  			serif: ['Lora', 'ui-serif', 'Georgia', 'serif']
+  		},
   		borderRadius: {
   			lg: 'var(--radius)',
   			md: 'calc(var(--radius) - 2px)',
   			sm: 'calc(var(--radius) - 4px)'
   		},
   		colors: {
+  			ob: {
+  				navy: '#071b3e',
+  				slate: '#64748b',
+  				line: '#e2e8f0',
+  				mist: '#f1f5f9'
+  			},
   			background: 'hsl(var(--background))',
   			foreground: 'hsl(var(--foreground))',
   			card: {
