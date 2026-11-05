@@ -10,7 +10,7 @@ export default function JoinCommunity() {
         <div className="mx-auto flex w-full max-w-[760px] flex-col items-center gap-[22px] text-center">
           <h2 className="font-serif text-[32px] font-normal leading-[1.15] text-[#f2ede4] sm:text-[46px]">
             {FINAL_INVITATION.headingPrefix}
-            <span className="text-[#eec84b]">{FINAL_INVITATION.headingAccent}</span>
+            <span className="text-[#5b8dd9]">{FINAL_INVITATION.headingAccent}</span>
           </h2>
           <p className="text-sm text-[#c8d0e0]">{FINAL_INVITATION.subtitle}</p>
         </div>

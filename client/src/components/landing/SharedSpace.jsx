@@ -8,7 +8,7 @@ const ICONS = { messagesSquare, gitBranch };
 function ConversationPreview() {
   const { title, status, messages, agreement } = CONVERSATION_PREVIEW;
   return (
-    <div className="flex min-w-0 flex-1 flex-col gap-[22px] rounded-3xl border-[3px] border-[#eec84b] bg-[#fffcf5] p-[26px]">
+    <div className="flex min-w-0 flex-1 flex-col gap-[22px] rounded-3xl border-[3px] border-[#5b8dd9] bg-white p-[26px]">
       <div className="flex items-center justify-between gap-3">
         <p className="font-serif text-[26px] leading-[26px] text-ob-navy">{title}</p>
         <span className="shrink-0 rounded-full bg-[#dde4f0] px-[9px] py-[5px] text-[10px] font-semibold text-ob-navy">

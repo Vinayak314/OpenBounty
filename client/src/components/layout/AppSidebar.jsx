@@ -1,5 +1,5 @@
 import { Link, NavLink } from "react-router-dom";
-import { CircleHelp, LayoutDashboard, Sprout, UserRound } from "lucide-react";
+import { LayoutDashboard, Sprout, UserRound } from "lucide-react";
 import logoMark from "@/assets/app/logo-mark.svg";
 import { cn } from "@/lib/utils";
 import { navItems, sidebarNote } from "@/data/dashboard";
@@ -27,10 +27,6 @@ const VARIANTS = {
     activeIcon: "text-white",
     inactiveIcon: "text-[#f8fafc]",
     showNote: true,
-    helpLabel: "Help & community",
-    helpIconSize: 17,
-    helpGap: "gap-[10px]",
-    helpColor: "text-[#cbd5e1]",
     avatar: "size-8 text-[10.24px]",
     identityGap: "gap-1",
     handleColor: "text-[#cbd5e1]",
@@ -48,10 +44,6 @@ const VARIANTS = {
     activeIcon: "text-[#e2e8f0]",
     inactiveIcon: "text-[#94a3b8]",
     showNote: false,
-    helpLabel: "Help",
-    helpIconSize: 15,
-    helpGap: "gap-2",
-    helpColor: "text-ob-slate",
     avatar: "size-[30px] text-[10px]",
     identityGap: "gap-0.5",
     handleColor: "text-ob-slate",
@@ -132,18 +124,14 @@ export default function AppSidebar({ active, variant = "default", width }) {
       </nav>
 
       {v.showNote && (
-        <Link to="/project" className="group flex flex-col gap-[10px] rounded-[14px] border border-[#294064] p-4 outline-none transition-all duration-200 hover:-translate-y-1 hover:border-[#4a6591] hover:bg-[#0f2a5a]/50 focus-visible:ring-2 focus-visible:ring-white/50">
-          <Sprout {...iconProps} size={25} className="text-white transition-transform duration-300 group-hover:-rotate-12 group-hover:scale-125" />
+        <div className="flex flex-col gap-[10px] rounded-[14px] border border-[#294064] p-4">
+          <Sprout {...iconProps} size={25} className="text-white" />
           <p className="font-serif text-xl leading-[normal] text-[#f8fafc]">{sidebarNote.title}</p>
           <p className="text-[11px] leading-[1.6] text-[#cbd5e1]">{sidebarNote.body}</p>
-        </Link>
+        </div>
       )}
 
-      <div className="absolute bottom-7 left-5 right-5 flex flex-col gap-4">
-        <Link to="/project" className={cn("group flex items-center transition-colors hover:text-white", v.helpGap, v.helpColor)}>
-          <CircleHelp {...iconProps} size={v.helpIconSize} className="transition-transform duration-200 group-hover:rotate-12 group-hover:scale-110" />
-          <span className="text-xs group-hover:underline">{v.helpLabel}</span>
-        </Link>
+      <div className="absolute bottom-7 left-5 right-5">
         <div className="flex min-w-0 items-center gap-[10px]">
           {githubUrl ? (
             <a href={githubUrl} target="_blank" rel="noreferrer" aria-label="Open GitHub profile">

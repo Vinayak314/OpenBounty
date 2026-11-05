@@ -17,14 +17,14 @@ export default function Principles() {
       </div>
       <div className="grid gap-[22px] md:grid-cols-3">
         {PRINCIPLES.map((p) => (
-          <article key={p.id} className="flex flex-col items-start gap-[22px] rounded-3xl bg-[#fffcf5] p-7">
+          <article key={p.id} className="flex flex-col items-start gap-[22px] rounded-3xl bg-white p-7">
             <div className="flex w-full items-center justify-between">
               <img alt="" src={ICONS[p.icon]} className="size-[29px]" />
               <span className="font-serif text-[29px] italic text-[#5b8dd9]">{p.number}</span>
             </div>
             <h3 className="font-serif text-[28px] font-normal leading-[1.2] text-ob-navy">{p.title}</h3>
             <p className="text-[13px] leading-[1.75] text-[#6b7a99]">{p.description}</p>
-            <span className="rounded-full bg-[#f7edbe] px-[9px] py-[5px] text-[10px] font-semibold text-ob-navy">
+            <span className="rounded-full bg-[#dde4f0] px-[9px] py-[5px] text-[10px] font-semibold text-ob-navy">
               {p.tag}
             </span>
           </article>

@@ -22,7 +22,7 @@ function Chip({ src }) {
 export default function Hero() {
   return (
     <>
-      <section className="flex flex-col items-center gap-[23px] border-x-4 border-[#eec84b] px-5 pt-[46px] sm:px-10 lg:px-[100px]">
+      <section className="flex flex-col items-center gap-[23px] border-x-4 border-[#5b8dd9] px-5 pt-[46px] sm:px-10 lg:px-[100px]">
         <div className="flex items-center gap-3">
           <img alt="" src={sparkle} className="size-[17px]" />
           <p className="text-center text-[11px] font-semibold tracking-[2.2px] text-ob-navy">

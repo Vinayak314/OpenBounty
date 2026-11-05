@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import folkPattern from "@/assets/wallet/folk-pattern.jpg";
 import OnboardingHeader from "@/components/wallet/OnboardingHeader";
 import JourneyProgress from "@/components/wallet/JourneyProgress";
@@ -29,6 +30,7 @@ async function switchToBase(ethereum) {
 }
 
 export default function ConnectWalletPage() {
+  const navigate = useNavigate();
   const { name, handle, initials } = useAuth();
   const s = WALLET_SESSION;
   const account = { ...s.account, name, handle, initials };
@@ -75,6 +77,7 @@ export default function ConnectWalletPage() {
         body: { address, chainId, signature },
       });
       setWallet(result.wallet);
+      navigate("/dashboard", { replace: true });
     } catch (error) {
       if (error.code === 4001) setWalletError("Connection was cancelled in MetaMask.");
       else setWalletError(error.message || "Could not connect MetaMask. Please try again.");
