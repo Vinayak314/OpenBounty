@@ -17,3 +17,6 @@ node_modules
 ignition/deployments/chain-31337
 
 .cursorignore
+# Local deployment records (Whitechain records under deployments/whitechainSepolia.* are meant to be committed)
+deployments/hardhat.*
+deployments/localhost.*
