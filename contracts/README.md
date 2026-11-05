@@ -1,0 +1,220 @@
+# OpenBounty escrow contracts
+
+Solidity escrow for OpenBounty bounties on **Whitechain Sepolia** (chain `1874`), paying out the designated
+test USDT. Built with Hardhat (the toolchain already used in this folder), Solidity `0.8.28`, OpenZeppelin 5.
+
+> **Status (honest summary).** The contract compiles and passes its local test suite (70 tests).
+> It has **not** been deployed, **not** verified on the explorer, **not** audited, and the gasless/sponsored
+> provider is **not** chosen. Deployed addresses below are placeholders. Product docs in this repo describe planned
+> behaviour; this folder is the only part of the payment flow that exists as code.
+
+| Item | Value |
+|---|---|
+| Network | Whitechain Sepolia, chain id `1874`, L2 on Ethereum Sepolia |
+| RPC / Explorer | `https://rpc.testnet.whitechain.io` / `https://explorer.testnet.whitechain.io` |
+| Reward token | designated test USDT `0xcedfB56113143d55b2358b8CFbB0dEB5Ad2f55a7` (6 decimals) |
+| Gas token | WBT (test, no value) |
+| Escrow address | `TBD` (placeholder, fill in after deployment, see [Deployed addresses](#deployed-addresses)) |
+
+## Layout
+
+```
+contracts/BountyEscrow.sol          the escrow (the only production contract)
+contracts/interfaces/IERC3009.sol   receiveWithAuthorization interface used for gasless funding
+contracts/mocks/                    LOCAL TEST ONLY: MockUSDT, fee-on-transfer, reentrant token, ERC-1271 account
+test/BountyEscrow.js, test/helpers.js   70 tests; helpers hold the EIP-712 type definitions a backend should mirror
+scripts/deploy.js                   deployment script (env-driven, guards chain id and token)
+.env.example                        variables read by hardhat.config.js / deploy.js (no secrets committed)
+```
+
+## Quick start
+
+```bash
+cd contracts
+npm install
+npx hardhat compile
+npx hardhat test          # 70 passing
+```
+
+Deploy (test key only, never commit `.env`):
+
+```bash
+cp .env.example .env      # fill PRIVATE_KEY (funded with test WBT), OWNER_ADDRESS, ATTESTATION_SIGNER_ADDRESS
+npx hardhat run scripts/deploy.js --network whitechainSepolia
+```
+
+The script refuses to run on any chain other than `1874` or a local network, refuses any token other than the
+designated USDT on `1874`, requires an attestation signer distinct from the owner and deployer, aborts before sending
+anything if the deployer has no gas, and writes `deployments/<network>.json` (no secrets). `MockUSDT` is deployed only on
+local networks.
+
+## Contract design
+
+### Lifecycle
+
+```
+Draft --fund--> Funded --acceptClaim--> Claimed --registerSubmission--> Submitted --settle--> Paid
+                  ^  |                    |                               |
+                  |  +--refund--> Refunded <---cancelByAgreement----------+ (also from Claimed)
+                  +-- claim expires ------+
+```
+
+* **Draft** is not stored: it is "no record". `fund` creates the record directly in `Funded`, so amount, token, criteria
+  hash, repo reference and submission deadline are locked at the moment money arrives and can never be edited. Reusing a
+  bounty id reverts (`BountyExists`).
+* **Claimed**: exactly one claimant, with a **bound recipient** and a `claimVersion` (increments each acceptance).
+  A claim lasts `min(acceptedAt + 72h, submissionDeadline)`. Expiry is lazy: after it passes, the bounty reads `Funded`
+  (`effectiveStatus`), anyone may call `expireClaim`, and `acceptClaim`/`refund` also release it. Releasing a claim never
+  refunds by itself.
+* **Submitted**: the backend attested the claimant's PR before the claim expired. A submitted bounty cannot expire and
+  cannot be unilaterally refunded, even after the deadline.
+* **Paid / Refunded** are terminal.
+
+### Who can do what
+
+| Action | Authority (checked at execution time) |
+|---|---|
+| Grant/revoke maintainer, settlement-wallet flag, attestation signer, token allowlist | **Owner** only (two-step ownership, renounce disabled) |
+| `fund`, `fundWithAuthorization` | maintainer or owner (the funder); contributors cannot |
+| `acceptClaim` | maintainer or owner; recipient must not be the funder or the accepting signer |
+| `registerSubmission` | anyone may relay, but needs a **backend attestation** |
+| `settle` | anyone may relay, but needs **both** a human payout approval and a backend attestation |
+| `refund` | the original funder, or a maintainer/owner. Funds **always** go to the original funder |
+| `cancelByAgreement` | funder-side party (funder or maintainer/owner) **and** the bound claimant both sign |
+| `expireClaim` | anyone |
+
+Payout authority is stricter than maintainer: the approver must be the owner, or hold **both** the maintainer role and
+the settlement-wallet flag. The approver can never be the recipient (self-payment).
+
+Nobody can overwrite funded terms, redirect the agreed recipient, or withdraw arbitrary escrow balances: the contract has
+no withdraw/sweep/rescue function. Tokens leave only through `settle` (to the bound recipient), `refund`, and
+`cancelByAgreement` (both to the original funder). The owner is the repository/workspace owner wallet, **not** a platform
+administrator, and cannot move escrowed funds.
+
+### Settlement: two independent authorizations
+
+`settle(Settlement s, Attestation att, Auth approval)` pays once and requires both:
+
+1. **Human approval** (`PayoutApproval`, EIP-712) from an authorized maintainer/settlement wallet.
+2. **Backend attestation** (`SettlementAttestation`, EIP-712) from `attestationSigner`, expiring within
+   `MAX_ATTESTATION_TTL` (1 hour, enforced on chain).
+
+Both sign the same fields: `bountyId, claimVersion, recipient, amount, criteriaHash, reviewedSha, mergeRef,
+reportHash`, each plus its own `nonce` and `expiry`/`deadline`. The signed `recipient`, `amount` and `criteriaHash` must
+equal what is stored on chain; the recipient is never taken from calldata alone. The two EIP-712 primary types differ,
+so one role's signature cannot be replayed as the other's, nor a submission attestation as a settlement attestation.
+
+Replay and double payout: the status flips to `Paid` before the transfer; attestation nonces are single-use per signer;
+approval nonces are single-use per signer (and a signer can burn an unused one with `invalidateNonce`); `claimVersion`
+makes evidence about a superseded claim unusable; the EIP-712 domain binds `chainId` and the escrow address.
+
+### Relayed / sponsored execution
+
+Every privileged action takes `Auth{signer, nonce, deadline, signature}` (human TTL at most 24h). Authority is the
+**verified signer**: ECDSA, or ERC-1271 for smart accounts (OpenZeppelin `SignatureChecker`). `msg.sender` is trusted only
+when it equals `signer` (a wallet or smart account calling directly). A relayer, gas sponsor or backend that submits the
+transaction has no authority of its own. Tests cover: a zero-ETH maintainer accepting and approving purely by signing,
+an ERC-1271 account approving through a relayer, forged signatures, and cross-contract/cross-chain replay.
+
+**Gasless funding.** `fundWithAuthorization` pulls an EIP-3009 `receiveWithAuthorization` signed by the funder. The 3009
+`nonce` must equal `hashTerms(terms, funder)`, so one signature commits to the exact bounty terms and a relayer cannot
+attach the funds to different terms (tested). Plain `fund` (after `approve`) also works, including from a smart account.
+
+### Events (indexer contract)
+
+`BountyFunded`, `ClaimAccepted` (includes `claimExpiry`), `ClaimExpired`, `SubmissionRegistered`, `PayoutSettled`
+(receipt: recipient, amount, token, evidence hashes, approver, attestation signer, nonce), `BountyRefunded` (with
+`RefundReason` and authorizing party), plus `MaintainerUpdated`, `SettlementWalletUpdated`, `AttestationSignerUpdated`,
+`TokenAllowlistUpdated`, `NonceInvalidated`. A test replays these logs into a toy indexer and checks it matches
+`effectiveStatus` for every bounty. Because expiry is lazy, an indexer must apply `claimExpiry` itself instead of waiting
+for a `ClaimExpired` log. State must be derived from receipts/events, never from a client-supplied transaction hash.
+
+### Interpretation choices worth reviewing
+
+* **"Before a claim" refund** is read as "no active claim": it includes after a claim expired. After a release the
+  funder (or a maintainer on their behalf) may refund at any time; the work is reopened only if nobody refunds.
+* **Submission is attested by the backend**, not by the claimant, so a claimant cannot lock funds with a fake submission.
+* **Maintainer + settlement flag** are separate owner-granted permissions; payouts need both (owner implicit).
+* **One escrow, many bounties**; `bountyId` is chosen by the backend (suggest `keccak256` of the database id). Only
+  maintainers can fund, so id squatting is limited to maintainers.
+
+## Backend integration notes
+
+EIP-712 domain: `{name: "OpenBountyEscrow", version: "1", chainId: 1874, verifyingContract: <escrow>}`. The exact
+type strings are in `BountyEscrow.sol` (public `*_TYPEHASH` constants) and mirrored independently in `test/helpers.js`.
+Suggested encodings (conventions, not enforced on chain): `criteriaHash = keccak256(canonical criteria JSON)`,
+`repoRef = keccak256(repoId, issueId)`, `reviewedSha` = 20-byte git SHA left-padded to 32 bytes, `mergeRef` = merge commit
+or event id, `reportHash` = hash of the stored 0G evidence report. Generate attestation nonces randomly (uint256) and
+keep the attestation key separate from the AI service and from any gas-sponsor key. For gasless funding read the token's
+own `DOMAIN_SEPARATOR()`; do not rely on `version()` (it reverts on the live token).
+
+## What was verified, and how
+
+* `npx hardhat compile` and `npx hardhat test`: 70 passing against local mocks. Quick mutation checks (removing
+  `nonReentrant` on `settle`, the recipient/amount/criteria check, signature verification, the `Paid` status write) each
+  made tests fail, so the suite is not vacuous.
+* Read-only checks against the live Whitechain Sepolia RPC (no transactions sent):
+  chain id `1874`; the designated USDT is an EIP-1967 proxy named "Tether USD" / `USDT` / 6 decimals;
+  its `DOMAIN_SEPARATOR()` equals the EIP-712 domain `("Tether USD", "1", 1874, token)` (so `version()` reverting does
+  not matter); `RECEIVE_WITH_AUTHORIZATION_TYPEHASH` equals the standard one; via `eth_call`, a correct
+  `receiveWithAuthorization` signature passes the signature check and fails only on balance, a wrong key or domain
+  fails with `invalid signature`, and a caller other than `to` reverts with `to != msg.sender`. The chain executes
+  `PUSH0`, `MCOPY` and `TSTORE` (probed), so `evmVersion: cancun` is used.
+* **Not verified:** an actual on-chain `fundWithAuthorization` / settlement transaction against the live token (needs a funded
+  test key and test USDT); explorer verification (the Whitechain docs do not describe a flow; `hardhat.config.js` uses the
+  Blockscout `/api` endpoint as an unconfirmed guess); embedded-wallet / sponsorship provider compatibility.
+
+## Trust boundary
+
+The contract **cannot read GitHub**. It trusts the signer in `attestationSigner` for: (a) the claimant's PR was linked in
+time (`registerSubmission`), and (b) the PR was merged and reviewed at `reviewedSha` with `reportHash` (`settle`). Before
+signing, the backend must re-validate GitHub (PR author, merge state, head SHA, CI, report freshness) immediately; that is
+off-chain logic that this repo's contracts cannot enforce. Keep that key separate from the 0G/AI service, which has no
+signing authority.
+
+What a compromised or buggy backend key **can** do: register a fake submission (locking a bounty until mutual cancellation,
+or until the owner rotates the signer and a new attestation is issued), or co-sign a premature payout *if* a maintainer also
+approves it. What it **cannot** do: pay without a maintainer's signature, change the recipient or amount, refund, or touch
+other bounties' terms. What a malicious owner can do: grant roles, rotate the signer, allowlist tokens for *new* bounties,
+and approve payouts to the claimant a maintainer accepted. The owner cannot redirect funds.
+
+## Limitations and risks
+
+* **Submitted work can stay locked.** Per the MVP rules there is no arbitration and no unilateral refund after a protected
+  submission: only `settle` or `cancelByAgreement` resolves it. A lost attestation key or an uncooperative claimant leaves
+  funds locked (the owner can rotate the signer to recover the settlement path). **Show this before funding and claiming.**
+* **Token risk.** The designated USDT is an upgradeable proxy (implementation `0x26425662d126412128967ecf0a02ec48573026f7`,
+  owner `0x8790832Ba493Cc16a4dBC5c961B0C4950632799c` as read from the chain). Its owner could change behaviour; whether it can
+  blacklist or pause addresses was not checked. A blocked recipient would make `settle` revert. Test tokens carry no value.
+* Fee-on-transfer/rebasing tokens are rejected at funding (received amount must equal `amount`).
+* **Verified recipient wallet is off chain.** The maintainer signs the recipient; wallet-ownership proof is a backend step.
+  Self-payment is blocked per account, which is not Sybil resistance.
+* **Gasless/sponsored UX is unresolved.** The contract supports signature-based authorization, ERC-1271 accounts and
+  EIP-3009 funding, which are the building blocks. The embedded wallet/smart-account provider, paymaster/relayer, its
+  allowlists and rate limits, and how token approval is sponsored remain to be built and proven on chain 1874 before any
+  "gasless" claim. `fund` by a smart account still needs an `approve`; the 3009 path avoids it.
+* No pause switch, no upgradeability, no native-token handling (ETH sent by mistake reverts; tokens sent directly to the
+  contract are unrecoverable by design).
+* Not audited. Tests are local only; no fuzz/invariant campaign or formal verification yet.
+* Time rules use `block.timestamp`. Claim windows and deadlines are not adjusted for sequencer clock skew.
+
+## Deployed addresses
+
+| Network | Contract | Address | Tx / explorer link | Verified |
+|---|---|---|---|---|
+| Whitechain Sepolia (1874) | `BountyEscrow` | `TBD` | `TBD` | no |
+| Whitechain Sepolia (1874) | USDT (designated, external) | `0xcedfB56113143d55b2358b8CFbB0dEB5Ad2f55a7` | [explorer](https://explorer.testnet.whitechain.io/address/0xcedfB56113143d55b2358b8CFbB0dEB5Ad2f55a7) | n/a |
+
+After deploying: commit `deployments/whitechainSepolia.json`, link the settlement transaction here (ETHGlobal's
+Whitechain tracks require a USDT payment settled in the main flow with the explorer link in the README), and attempt
+`npx hardhat verify --network whitechainSepolia --constructor-args-path deployments/whitechainSepolia.args.js <escrow>`.
+
+Gas reference from the local suite (not a Whitechain measurement): `fund` ~203k, `acceptClaim` ~91k,
+`registerSubmission` ~89k, `settle` ~150k, `refund` ~86k, `cancelByAgreement` ~119k.
+
+## Sources
+
+Network parameters: <https://docs.whitechain.io/learn/network/testnet>. Viem usage (`whitechainSepolia` in
+`viem/chains`): <https://docs.whitechain.io/build/dapps/use-viem>. Track requirements (designated USDT, explorer
+verification, README line on stablecoin settlement, `WHITECHAIN_FEEDBACK.md`, gasless payer for Scale):
+<https://ethglobal.com/events/mumbai/prizes>. Product spec: `OpenBounty-SRS.md`, `OpenBounty-Project-Overview.md`.
