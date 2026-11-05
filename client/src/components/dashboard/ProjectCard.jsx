@@ -1,4 +1,5 @@
 import { ArrowRight, BookOpen, CircleDollarSign, Sprout, Waves } from "lucide-react";
+import { Link } from "react-router-dom";
 import InitialsAvatar from "@/components/layout/InitialsAvatar";
 import { iconProps } from "@/components/layout/icon";
 
@@ -11,20 +12,20 @@ export default function ProjectCard({ project }) {
 
   return (
     <article className="group relative flex min-h-[248px] min-w-0 flex-1 cursor-pointer flex-col gap-4 rounded-xl border border-[#e5e7eb] bg-white p-5 transition-all duration-200 hover:-translate-y-1 hover:border-ob-navy/30 hover:shadow-[0_14px_36px_-14px_rgba(7,27,62,0.3)] focus-within:ring-2 focus-within:ring-ob-navy/40 active:translate-y-0 active:scale-[0.995]">
-      <div className="flex items-center gap-[14px]">
+      <div className="flex min-w-0 items-center gap-[14px]">
         <span className="flex size-[43px] shrink-0 items-center justify-center rounded-[14px] bg-ob-mist transition-colors duration-200 group-hover:bg-ob-navy">
           <Icon {...iconProps} size={24} className="text-ob-navy transition-colors duration-200 group-hover:text-white" />
         </span>
-        <div className="flex min-w-0 flex-1 flex-col gap-[5px] whitespace-nowrap leading-[normal]">
-          <h3 className="font-serif text-[25px] font-normal text-ob-navy">{project.name}</h3>
-          <span className="text-[11px] text-ob-slate">{project.repo}</span>
+        <div className="flex min-w-0 flex-1 flex-col gap-[5px] leading-[normal]">
+          <h3 title={project.name} className="truncate font-serif text-[25px] font-normal text-ob-navy">{project.name}</h3>
+          <span title={project.repo} className="truncate text-[11px] text-ob-slate">{project.repo}</span>
         </div>
-        <span className="rounded-full bg-ob-mist px-[9px] py-[5px] text-[10px] font-semibold leading-[normal] text-ob-navy">
+        <span className="shrink-0 rounded-full bg-ob-mist px-[9px] py-[5px] text-[10px] font-semibold leading-[normal] text-ob-navy">
           {project.role}
         </span>
       </div>
 
-      <p className="text-[13px] leading-[1.6] text-ob-slate">{project.description}</p>
+      <p className="line-clamp-2 min-h-[42px] break-words text-[13px] leading-[1.6] text-ob-slate">{project.description}</p>
 
       <div className="flex items-center gap-[7px] leading-[normal]">
         <CircleDollarSign {...iconProps} size={16} className="text-ob-navy" />
@@ -50,15 +51,13 @@ export default function ProjectCard({ project }) {
             {project.memberCount} {project.memberCount === 1 ? "member" : "members"}
           </span>
         </div>
-        <a
-          href={project.repoUrl || project.workspaceHref}
-          target={project.repoUrl ? "_blank" : undefined}
-          rel={project.repoUrl ? "noreferrer" : undefined}
+        <Link
+          to={project.workspaceHref}
           className="flex items-center gap-1 text-xs font-semibold leading-[normal] text-ob-navy outline-none after:absolute after:inset-0 after:content-['']"
         >
-          {project.repoUrl ? "Open repository" : "Open workspace"}
+          Open project chat
           <ArrowRight {...iconProps} size={14} className="transition-transform duration-200 group-hover:translate-x-1" />
-        </a>
+        </Link>
       </div>
     </article>
   );

@@ -117,7 +117,7 @@ router.get("/projects", async (req, res) => {
     const user = await getOrCreateUser(req.firebaseUser);
     const projects = await Project.find({ owner: user._id, status: { $ne: "archived" } }).sort({ updatedAt: -1 });
     res.json({ projects: projects.map((project) => ({
-      id: project.id, name: project.name, description: project.description,
+      id: project.id, slug: project.slug, name: project.name, description: project.description,
       repository: project.githubRepository, role: "Owner", updatedAt: project.updatedAt,
     })) });
   } catch (error) {
@@ -159,7 +159,7 @@ router.post("/projects", async (req, res) => {
     user.ownedProjects.addToSet(project._id);
     await user.save();
     res.status(201).json({ project: {
-      id: project.id, name: project.name, description: project.description,
+      id: project.id, slug: project.slug, name: project.name, description: project.description,
       repository: project.githubRepository, role: "Owner", updatedAt: project.updatedAt,
     } });
   } catch (error) {

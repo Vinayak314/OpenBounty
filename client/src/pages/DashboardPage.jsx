@@ -35,11 +35,10 @@ export default function DashboardPage() {
     try {
       const result = await apiRequest("/me/projects");
       setProjects(result.projects.map((p) => ({
-        id: p.id, name: p.name, repo: p.repository.fullName, description: p.description,
-        repoUrl: p.repository.url,
+        id: p.id, slug: p.slug, name: p.name, repo: p.repository.fullName, description: p.description,
         role: p.role, icon: "sprout", openBounties: 0,
         updatedLabel: `Updated ${new Date(p.updatedAt).toLocaleDateString()}`,
-        memberCount: 1, members: [{ initials, tone: "orange" }], workspaceHref: "/project",
+        memberCount: 1, members: [{ initials, tone: "orange" }], workspaceHref: `/project/${encodeURIComponent(p.slug)}`,
       })));
       setPageError("");
     } catch (error) {

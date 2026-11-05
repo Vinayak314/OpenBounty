@@ -3,11 +3,12 @@ require("dotenv").config();
 const express = require("express");
 const mongoose = require("mongoose");
 const meRouter = require("./routes/me");
+const projectsRouter = require("./routes/projects");
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 
-app.use(express.json({ limit: "32kb" }));
+app.use(express.json({ limit: "5mb" }));
 app.use((req, res, next) => {
   const allowedOrigins = (process.env.CLIENT_ORIGINS || "").split(",").map((origin) => origin.trim()).filter(Boolean);
   if (allowedOrigins.includes(req.headers.origin)) {
@@ -21,6 +22,7 @@ app.use((req, res, next) => {
 });
 app.get("/", (_req, res) => res.send("OpenBounty API"));
 app.use("/api/me", meRouter);
+app.use("/api/projects", projectsRouter);
 
 async function start() {
   if (!process.env.MONGODB_URI) {

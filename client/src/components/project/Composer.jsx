@@ -1,17 +1,16 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, CornerUpLeft, FileText, Paperclip, Pencil, Plus, Smile, X } from "lucide-react";
+import { ArrowUp, CornerUpLeft, FileText, Paperclip, Pencil, Smile, X } from "lucide-react";
 import { CHANNEL } from "@/data/project";
 import { COMMANDS } from "@/hooks/useChat";
 
-const DRAFT_KEY = "ob-chat-draft:general";
 const EMOJIS = ["😀", "😂", "🙂", "😍", "🤔", "😅", "🙌", "👏", "👍", "👎", "🎉", "🔥", "✅", "❌", "👀", "🚀", "💡", "🐛", "❤️", "🙏", "💸", "📎", "⚠️", "✨"];
 const MAX_IMG = 400 * 1024;
 
-const MENTIONABLE = [{ id: "agent", name: "Bounty agent" }];
+const MENTIONABLE = [];
 
-const readDraft = () => {
+const readDraft = (key) => {
   try {
-    return localStorage.getItem(DRAFT_KEY) || "";
+    return localStorage.getItem(key) || "";
   } catch {
     return "";
   }
@@ -25,8 +24,9 @@ const toDataUrl = (file) =>
     r.readAsDataURL(file);
   });
 
-export default function Composer({ onSend, replyTo, onCancelReply, editing, onSaveEdit, onCancelEdit }) {
-  const [text, setText] = useState(readDraft);
+export default function Composer({ onSend, replyTo, onCancelReply, editing, onSaveEdit, onCancelEdit, projectSlug, projectName }) {
+  const draftKey = `ob-chat-draft:${projectSlug || "project"}`;
+  const [text, setText] = useState(() => readDraft(draftKey));
   const [files, setFiles] = useState([]);
   const [caret, setCaret] = useState(0);
   const [focused, setFocused] = useState(false);
@@ -44,11 +44,11 @@ export default function Composer({ onSend, replyTo, onCancelReply, editing, onSa
   useEffect(() => {
     if (editing) return;
     try {
-      localStorage.setItem(DRAFT_KEY, text);
+      localStorage.setItem(draftKey, text);
     } catch {
       /* storage unavailable */
     }
-  }, [text, editing]);
+  }, [text, editing, draftKey]);
 
   // Entering/leaving edit mode swaps the box content.
   useEffect(() => {
@@ -126,8 +126,9 @@ export default function Composer({ onSend, replyTo, onCancelReply, editing, onSa
   };
 
   const addFiles = async (list) => {
+    const remaining = Math.max(0, 5 - files.length);
     const items = await Promise.all(
-      Array.from(list).map(async (f) => ({
+      Array.from(list).slice(0, remaining).map(async (f) => ({
         name: f.name,
         preview: f.type.startsWith("image/") && f.size <= MAX_IMG ? await toDataUrl(f) : null,
       })),
@@ -250,14 +251,11 @@ export default function Composer({ onSend, replyTo, onCancelReply, editing, onSa
                 addFiles(imgs);
               }
             }}
-            placeholder={CHANNEL.composerPlaceholder}
+            placeholder={`Message #general in ${projectName || CHANNEL.project}…`}
             className="block max-h-40 w-full resize-none bg-transparent text-[12px] leading-5 text-ob-navy outline-none placeholder:text-ob-slate"
           />
           <div className="mt-3 flex items-center justify-between">
             <div className="relative flex items-center gap-3 text-ob-slate">
-              <button type="button" aria-label="Mention someone" onClick={() => insertAtCaret("@")} className="transition-colors hover:text-ob-navy">
-                <Plus className="size-4" strokeWidth={1.6} />
-              </button>
               {!editing && (
                 <button type="button" aria-label="Attach file" onClick={() => fileInput.current?.click()} className="transition-colors hover:text-ob-navy">
                   <Paperclip className="size-4" strokeWidth={1.6} />
@@ -278,7 +276,7 @@ export default function Composer({ onSend, replyTo, onCancelReply, editing, onSa
                 )}
               </div>
               <input ref={fileInput} type="file" multiple hidden onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
-              <span className="text-[10px]">{CHANNEL.composerHint} · Enter to send · / for commands</span>
+              <span className="text-[10px]">Markdown · Enter to send</span>
             </div>
             <button
               type="button"
@@ -291,7 +289,7 @@ export default function Composer({ onSend, replyTo, onCancelReply, editing, onSa
           </div>
         </div>
       </div>
-      <p className="mt-2 text-[10px] text-ob-slate">{CHANNEL.visibility}</p>
+      <p className="mt-2 text-[10px] text-ob-slate">Project messages are saved to this workspace.</p>
     </div>
   );
 }

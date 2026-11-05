@@ -1,10 +1,9 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
-  ArrowDown, Check, CheckCheck, Copy, CornerUpLeft, FileText, GitPullRequest, Pencil, Pin, SmilePlus, Sparkles, Trash2,
+  ArrowDown, Check, CheckCheck, Copy, CornerUpLeft, FileText, GitPullRequest, Pencil, SmilePlus, Sparkles, Trash2,
 } from "lucide-react";
 import Avatar from "./Avatar";
 import EvidenceReport from "./EvidenceReport";
-import { CHANNEL } from "@/data/project";
 
 const EMOJIS = ["👍", "🎉", "👀", "❤️"];
 
@@ -213,7 +212,7 @@ function Typing({ who }) {
   );
 }
 
-export default function ChatThread({ messages, typing, query, onReact, onReply, onEdit, onDelete }) {
+export default function ChatThread({ messages, typing, loading, query, onReact, onReply, onEdit, onDelete }) {
   const scroller = useRef(null);
   const bottom = useRef(null);
   const stick = useRef(true);
@@ -262,15 +261,11 @@ export default function ChatThread({ messages, typing, query, onReact, onReply, 
   return (
     <div className="relative min-h-0 flex-1">
       <div ref={scroller} onScroll={onScroll} id="general" className="h-full overflow-y-auto scroll-smooth px-6 pb-4 pt-[14px]">
-        <div className="sticky top-0 z-10 -mx-1 bg-[#f8fafc] px-1 pb-3">
-          <div className="flex h-10 items-center gap-[10px] rounded-[10px] border border-ob-line bg-[#f8fafc] px-[10px] text-[11px] text-ob-navy">
-            <Pin className="size-4" strokeWidth={1.8} />
-            <span>{CHANNEL.pinned.text}</span>
-            <button type="button" className="ml-auto font-semibold hover:underline">{CHANNEL.pinned.action} &rarr;</button>
-          </div>
-        </div>
+        <div className="sticky top-0 z-10 -mx-1 bg-[#f8fafc] px-1 pb-3"><div className="rounded-[10px] border border-ob-line bg-white px-3 py-2 text-[11px] text-ob-slate">Project conversation</div></div>
         <div className="flex flex-col gap-5">
-          <p className="text-center text-[10px] text-ob-slate">{CHANNEL.dateLabel}</p>
+          {messages.length > 0 && <p className="text-center text-[10px] text-ob-slate">{new Date().toLocaleDateString()}</p>}
+          {loading && <p className="py-10 text-center text-[12px] text-ob-slate">Loading project messages…</p>}
+          {!loading && messages.length === 0 && !q && <p className="py-10 text-center text-[12px] text-ob-slate">No messages yet. Start the conversation for this project.</p>}
           {q && visible.length === 0 && <p className="py-10 text-center text-[12px] text-ob-slate">No messages match “{query}”.</p>}
           {visible.map((m) => (
             <div
