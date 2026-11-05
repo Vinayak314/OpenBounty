@@ -9,10 +9,10 @@ export default function HowItWorksPoster() {
             <span className="font-serif text-[34px] italic text-[#f2ede4]">{step.number}</span>
             <div className="flex flex-col gap-2">
               <span className="font-serif text-[25px] leading-[25px] text-[#f2ede4]">{step.title}</span>
-              <span className="text-[11px] text-[#c8d0e0]">{step.description}</span>
+              <span className="text-[11px] text-[#d1d5db]">{step.description}</span>
             </div>
             {index < HOW_IT_WORKS_STEPS.length - 1 && (
-              <span aria-hidden="true" className="hidden text-[24px] text-[#c8d0e0] md:inline">
+              <span aria-hidden="true" className="hidden text-[24px] text-[#d1d5db] md:inline">
                 →
               </span>
             )}

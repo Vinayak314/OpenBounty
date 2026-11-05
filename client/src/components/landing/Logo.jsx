@@ -4,7 +4,7 @@ import { BRAND_NAME } from "@/data/landing";
 export default function Logo({ dark = false }) {
   return (
     <div className="flex items-center gap-[10px]">
-      <div className={`flex size-[34px] shrink-0 items-center justify-center rounded-full ${dark ? "bg-[#5b8dd9]" : "bg-ob-navy"}`}>
+      <div className={`flex size-[34px] shrink-0 items-center justify-center rounded-full ${dark ? "bg-[#475569]" : "bg-ob-navy"}`}>
         <img alt="" src={flower} className="size-[25px]" />
       </div>
       <span

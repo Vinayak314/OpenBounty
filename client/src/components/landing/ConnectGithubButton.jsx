@@ -45,7 +45,7 @@ export default function ConnectGithubButton({ label, large = false }) {
         disabled={loading}
         className={`inline-flex h-[46px] items-center justify-center gap-2 rounded-lg bg-ob-navy px-5 text-sm font-semibold text-[#fffcf5] ${
           large
-            ? "border-2 border-[#5b8dd9] shadow-[0_8px_18px_rgba(7,27,62,0.15)]"
+            ? "border-2 border-white/60 shadow-[0_8px_18px_rgba(7,27,62,0.15)]"
             : "border border-ob-navy"
         } disabled:cursor-wait disabled:opacity-70`}
       >

@@ -10,15 +10,15 @@ export default function JoinCommunity() {
         <div className="mx-auto flex w-full max-w-[760px] flex-col items-center gap-[22px] text-center">
           <h2 className="font-serif text-[32px] font-normal leading-[1.15] text-[#f2ede4] sm:text-[46px]">
             {FINAL_INVITATION.headingPrefix}
-            <span className="text-[#5b8dd9]">{FINAL_INVITATION.headingAccent}</span>
+            <span className="text-[#d1d5db]">{FINAL_INVITATION.headingAccent}</span>
           </h2>
-          <p className="text-sm text-[#c8d0e0]">{FINAL_INVITATION.subtitle}</p>
+          <p className="text-sm text-[#d1d5db]">{FINAL_INVITATION.subtitle}</p>
         </div>
         <Mandala className="hidden md:block" />
       </div>
-      <footer className="flex flex-col items-center justify-between gap-4 border-t border-[#1e3a6e] pt-[30px] md:flex-row">
+      <footer className="flex flex-col items-center justify-between gap-4 border-t border-white/20 pt-[30px] md:flex-row">
         <Logo dark />
-        <p className="text-[11px] text-[#b0bdd6]">{FOOTER.copyright}</p>
+        <p className="text-[11px] text-[#a3a3a3]">{FOOTER.copyright}</p>
         <nav className="flex gap-6 text-[11px] text-[#f2ede4]">
           {FOOTER.links.map((l) => (
             <a key={l.id} href={l.href}>
