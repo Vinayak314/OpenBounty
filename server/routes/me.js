@@ -3,6 +3,7 @@ const express = require("express");
 const mongoose = require("mongoose");
 const { getAddress, verifyMessage } = require("ethers");
 const User = require("../models/User");
+const Project = require("../models/Project");
 const { requireFirebaseUser } = require("../middleware/requireFirebaseUser");
 
 const router = express.Router();
@@ -85,6 +86,85 @@ router.put("/github", async (req, res) => {
   } catch (error) {
     console.error("Could not link GitHub profile:", error.message);
     res.status(500).json({ error: "Could not save your GitHub profile." });
+  }
+});
+
+router.get("/github/repositories", async (req, res) => {
+  if (!ensureDatabase(res)) return;
+  try {
+    const user = await getOrCreateUser(req.firebaseUser);
+    const username = user.github?.username;
+    if (!username) return res.status(409).json({ error: "Connect your GitHub profile before adding a repository." });
+    const response = await fetch(`https://api.github.com/users/${encodeURIComponent(username)}/repos?sort=pushed&per_page=100`, {
+      headers: { Accept: "application/vnd.github+json", "User-Agent": "OpenBounty" },
+    });
+    if (!response.ok) return res.status(502).json({ error: "GitHub repositories could not be loaded." });
+    const repositories = await response.json();
+    res.json({ repositories: repositories.filter((repo) => !repo.fork && repo.owner.login.toLowerCase() === username.toLowerCase()).map((repo) => ({
+      id: String(repo.id), name: repo.name, fullName: repo.full_name,
+      description: repo.description || "", url: repo.html_url, private: repo.private,
+      owner: repo.owner.login, defaultBranch: repo.default_branch,
+    })) });
+  } catch (error) {
+    console.error("Could not load GitHub repositories:", error.message);
+    res.status(500).json({ error: "Could not load your GitHub repositories." });
+  }
+});
+
+router.get("/projects", async (req, res) => {
+  if (!ensureDatabase(res)) return;
+  try {
+    const user = await getOrCreateUser(req.firebaseUser);
+    const projects = await Project.find({ owner: user._id, status: { $ne: "archived" } }).sort({ updatedAt: -1 });
+    res.json({ projects: projects.map((project) => ({
+      id: project.id, name: project.name, description: project.description,
+      repository: project.githubRepository, role: "Owner", updatedAt: project.updatedAt,
+    })) });
+  } catch (error) {
+    console.error("Could not load projects:", error.message);
+    res.status(500).json({ error: "Could not load your projects." });
+  }
+});
+
+router.post("/projects", async (req, res) => {
+  if (!ensureDatabase(res)) return;
+  const fullName = typeof req.body?.fullName === "string" ? req.body.fullName.trim() : "";
+  if (!/^[a-zA-Z0-9-]{1,39}\/[a-zA-Z0-9_.-]{1,100}$/.test(fullName)) {
+    return res.status(400).json({ error: "Choose a valid GitHub repository." });
+  }
+  try {
+    const user = await getOrCreateUser(req.firebaseUser);
+    const username = user.github?.username;
+    const [repoOwner, repoName] = fullName.split("/");
+    if (!username || repoOwner.toLowerCase() !== username.toLowerCase()) {
+      return res.status(403).json({ error: "You can only add repositories from your connected GitHub account." });
+    }
+    const response = await fetch(`https://api.github.com/repos/${encodeURIComponent(repoOwner)}/${encodeURIComponent(repoName)}`, {
+      headers: { Accept: "application/vnd.github+json", "User-Agent": "OpenBounty" },
+    });
+    if (!response.ok) return res.status(422).json({ error: "That GitHub repository could not be verified." });
+    const repo = await response.json();
+    if (repo.owner.login.toLowerCase() !== username.toLowerCase()) return res.status(403).json({ error: "You can only add repositories from your connected GitHub account." });
+    const existing = await Project.findOne({ "githubRepository.fullName": repo.full_name });
+    if (existing) {
+      if (String(existing.owner) === String(user._id)) return res.status(409).json({ error: "That repository is already in your projects." });
+      return res.status(409).json({ error: "That repository has already been added to OpenBounty." });
+    }
+    const slugBase = `${repo.owner.login}-${repo.name}`.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-|-$/g, "").slice(0, 110);
+    const project = await Project.create({
+      name: repo.name, slug: `${slugBase}-${crypto.randomBytes(3).toString("hex")}`,
+      description: repo.description || "", owner: user._id,
+      githubRepository: { owner: repo.owner.login, name: repo.name, fullName: repo.full_name, url: repo.html_url },
+    });
+    user.ownedProjects.addToSet(project._id);
+    await user.save();
+    res.status(201).json({ project: {
+      id: project.id, name: project.name, description: project.description,
+      repository: project.githubRepository, role: "Owner", updatedAt: project.updatedAt,
+    } });
+  } catch (error) {
+    console.error("Could not add project:", error.message);
+    res.status(500).json({ error: "Could not add that project." });
   }
 });
 

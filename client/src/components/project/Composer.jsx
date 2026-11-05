@@ -1,16 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowUp, CornerUpLeft, FileText, Paperclip, Pencil, Plus, Smile, X } from "lucide-react";
-import { CHANNEL, MEMBER_GROUPS } from "@/data/project";
+import { CHANNEL } from "@/data/project";
 import { COMMANDS } from "@/hooks/useChat";
 
 const DRAFT_KEY = "ob-chat-draft:general";
 const EMOJIS = ["😀", "😂", "🙂", "😍", "🤔", "😅", "🙌", "👏", "👍", "👎", "🎉", "🔥", "✅", "❌", "👀", "🚀", "💡", "🐛", "❤️", "🙏", "💸", "📎", "⚠️", "✨"];
 const MAX_IMG = 400 * 1024;
 
-const MENTIONABLE = [
-  { id: "agent", name: "Bounty agent" },
-  ...MEMBER_GROUPS.flatMap((g) => g.members).map((m) => ({ id: m.id, name: m.name })),
-];
+const MENTIONABLE = [{ id: "agent", name: "Bounty agent" }];
 
 const readDraft = () => {
   try {

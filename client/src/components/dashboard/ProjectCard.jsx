@@ -1,4 +1,3 @@
-import { Link } from "react-router-dom";
 import { ArrowRight, BookOpen, CircleDollarSign, Sprout, Waves } from "lucide-react";
 import InitialsAvatar from "@/components/layout/InitialsAvatar";
 import { iconProps } from "@/components/layout/icon";
@@ -51,13 +50,15 @@ export default function ProjectCard({ project }) {
             {project.memberCount} {project.memberCount === 1 ? "member" : "members"}
           </span>
         </div>
-        <Link
-          to={project.workspaceHref}
+        <a
+          href={project.repoUrl || project.workspaceHref}
+          target={project.repoUrl ? "_blank" : undefined}
+          rel={project.repoUrl ? "noreferrer" : undefined}
           className="flex items-center gap-1 text-xs font-semibold leading-[normal] text-ob-navy outline-none after:absolute after:inset-0 after:content-['']"
         >
-          Open workspace
+          {project.repoUrl ? "Open repository" : "Open workspace"}
           <ArrowRight {...iconProps} size={14} className="transition-transform duration-200 group-hover:translate-x-1" />
-        </Link>
+        </a>
       </div>
     </article>
   );

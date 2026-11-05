@@ -12,22 +12,42 @@ import {
   dashboardAddProject,
   dashboardGreeting,
   dashboardNextReview,
-  dashboardProjects,
   dashboardProjectsHeader,
   dashboardStats,
-  availableRepos,
   roleFilters,
 } from "@/data/dashboard";
 import { useAuth } from "@/auth/AuthContext";
+import { apiRequest } from "@/lib/api";
 
-// Initial lists/values come from src/data/dashboard.js; adding a project is local state only (no backend yet).
 export default function DashboardPage() {
   const { name, initials } = useAuth();
-  const [projects, setProjects] = useState(dashboardProjects);
+  const [projects, setProjects] = useState([]);
+  const [repos, setRepos] = useState([]);
   const [role, setRole] = useState(roleFilters[0]);
   const [picker, setPicker] = useState(false);
   const [toast, setToast] = useState(null);
+  const [pickerLoading, setPickerLoading] = useState(false);
+  const [pickerError, setPickerError] = useState("");
+  const [pageError, setPageError] = useState("");
   const closePicker = useCallback(() => setPicker(false), []);
+
+  const loadProjects = useCallback(async () => {
+    try {
+      const result = await apiRequest("/me/projects");
+      setProjects(result.projects.map((p) => ({
+        id: p.id, name: p.name, repo: p.repository.fullName, description: p.description,
+        repoUrl: p.repository.url,
+        role: p.role, icon: "sprout", openBounties: 0,
+        updatedLabel: `Updated ${new Date(p.updatedAt).toLocaleDateString()}`,
+        memberCount: 1, members: [{ initials, tone: "orange" }], workspaceHref: "/project",
+      })));
+      setPageError("");
+    } catch (error) {
+      setPageError(error.message);
+    }
+  }, [initials]);
+
+  useEffect(() => { loadProjects(); }, [loadProjects]);
 
   useEffect(() => {
     if (!toast) return;
@@ -35,21 +55,33 @@ export default function DashboardPage() {
     return () => clearTimeout(t);
   }, [toast]);
 
-  const addedIds = useMemo(() => new Set(projects.map((p) => p.id)), [projects]);
+  const addedIds = useMemo(() => new Set(projects.map((p) => p.repo.toLowerCase())), [projects]);
   const shown = role === roleFilters[0] ? projects : projects.filter((p) => p.role === role);
 
-  const addRepo = (r) => {
-    setProjects((ps) => [
-      ...ps,
-      {
-        id: r.id, name: r.name, repo: r.repo, description: r.description, role: "Owner", icon: r.icon,
-        openBounties: 0, updatedLabel: "Updated just now", memberCount: 1,
-        members: [{ initials, tone: "orange" }], workspaceHref: "/project",
-      },
-    ]);
-    setRole(roleFilters[0]);
-    setPicker(false);
-    setToast(`${r.name} added to your projects`);
+  const openRepoPicker = async () => {
+    setPicker(true);
+    setPickerLoading(true);
+    setPickerError("");
+    try {
+      const result = await apiRequest("/me/github/repositories");
+      setRepos(result.repositories);
+    } catch (error) {
+      setPickerError(error.message);
+    } finally {
+      setPickerLoading(false);
+    }
+  };
+
+  const addRepo = async (repo) => {
+    try {
+      await apiRequest("/me/projects", { method: "POST", body: { fullName: repo.fullName } });
+      await loadProjects();
+      setRole(roleFilters[0]);
+      setPicker(false);
+      setToast(`${repo.name} added to your projects`);
+    } catch (error) {
+      setPickerError(error.message);
+    }
   };
 
   const rows = [];
@@ -79,7 +111,7 @@ export default function DashboardPage() {
             </div>
             <button
               type="button"
-              onClick={() => setPicker(true)}
+              onClick={openRepoPicker}
               className="group flex h-11 items-center justify-center gap-2 rounded-lg border border-[#e5e7eb] bg-white px-4 text-sm font-semibold text-ob-navy transition-all duration-200 hover:-translate-y-0.5 hover:border-ob-navy/40 hover:bg-ob-mist/50 hover:shadow-md active:translate-y-0 active:scale-95"
             >
               <Github {...iconProps} size={18} />
@@ -121,7 +153,7 @@ export default function DashboardPage() {
             </div>
             <button
               type="button"
-              onClick={() => setPicker(true)}
+              onClick={openRepoPicker}
               className="group flex items-center gap-2 rounded-lg border border-[#e5e7eb] bg-white p-2 text-xs text-ob-navy transition-all duration-200 hover:-translate-y-0.5 hover:border-ob-navy/40 hover:bg-ob-mist/50 hover:shadow-md active:translate-y-0 active:scale-95"
             >
               <Github {...iconProps} size={16} />
@@ -131,6 +163,8 @@ export default function DashboardPage() {
           </div>
 
           <section className="flex flex-col gap-4" aria-label="Projects">
+            {pageError && <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">{pageError}</p>}
+            {!pageError && projects.length === 0 && <p className="rounded-xl border border-dashed border-[#d1d5db] px-5 py-8 text-center text-sm text-ob-slate">Add one of your GitHub repositories to start a project.</p>}
             {rows.map((row, rowIndex) => {
               const isLast = rowIndex === rows.length - 1;
               return (
@@ -140,7 +174,7 @@ export default function DashboardPage() {
                       <ProjectCard project={project} />
                     </div>
                   ))}
-                  {isLast && <AddProjectCard content={dashboardAddProject} onClick={() => setPicker(true)} />}
+                  {isLast && <AddProjectCard content={dashboardAddProject} onClick={openRepoPicker} />}
                 </div>
               );
             })}
@@ -158,7 +192,7 @@ export default function DashboardPage() {
             <span className="font-semibold text-ob-navy group-hover:underline">{dashboardNextReview.actionLabel}</span>
           </Link>
         </main>
-        <RepoPickerModal open={picker} repos={availableRepos} addedIds={addedIds} onPick={addRepo} onClose={closePicker} />
+        <RepoPickerModal open={picker} repos={repos} addedIds={addedIds} onPick={addRepo} onClose={closePicker} loading={pickerLoading} error={pickerError} />
         {toast && (
           <div role="status" className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 animate-[rise_.25s_ease-out] items-center gap-2 rounded-full bg-ob-navy px-4 py-2 text-xs font-semibold text-white shadow-lg">
             <Check {...iconProps} size={14} /> {toast}

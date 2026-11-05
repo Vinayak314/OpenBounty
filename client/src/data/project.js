@@ -21,27 +21,7 @@ export const CHANNELS = [
   { id: "general", name: "general", unread: 3, active: true },
 ];
 
-export const MEMBER_GROUPS = [
-  {
-    id: "owners",
-    title: "Owners & Maintainers",
-    members: [
-      { id: "rm", name: "Rohan Mehta", initials: "RM", color: "navy", role: "Owner" },
-      { id: "pk", name: "Priya Kumar", initials: "PK", color: "navy", role: "Maintainer" },
-      { id: "as", name: "Ananya Shah", initials: "AS", color: "orange", role: "Maintainer · You" },
-    ],
-  },
-  {
-    id: "contributors",
-    title: "Contributors",
-    members: [
-      { id: "mi", name: "Maya Iyer", initials: "MI", color: "pink" },
-      { id: "kr", name: "Kavya Rao", initials: "KR", color: "navy" },
-      { id: "dp", name: "Dev Patel", initials: "DP", color: "orange" },
-    ],
-    moreCount: 2,
-  },
-];
+
 
 export const BOUNTY_THREADS = [
   { id: "42", title: "#42 · Keyboard navigation", subtitle: "3 new replies · PR #87", active: true },
