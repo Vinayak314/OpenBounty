@@ -3,7 +3,7 @@
 Solidity escrow for OpenBounty bounties on **Whitechain Sepolia** (chain `1874`), paying out the designated
 test USDT. Built with Hardhat (the toolchain already used in this folder), Solidity `0.8.28`, OpenZeppelin 5.
 
-> **Status (honest summary).** The contract compiles and passes its local test suite (70 tests).
+> **Status (honest summary).** The contract compiles and passes its local test suite (72 tests).
 > It has **not** been deployed, **not** verified on the explorer, **not** audited, and the gasless/sponsored
 > provider is **not** chosen. Deployed addresses below are placeholders. Product docs in this repo describe planned
 > behaviour; this folder is the only part of the payment flow that exists as code.
@@ -29,7 +29,7 @@ it does not guarantee fair review or code quality. (The team-owned root README n
 contracts/BountyEscrow.sol          the escrow (the only production contract)
 contracts/interfaces/IERC3009.sol   receiveWithAuthorization interface used for gasless funding
 contracts/mocks/                    LOCAL TEST ONLY: MockUSDT, fee-on-transfer, reentrant token, ERC-1271 account
-test/BountyEscrow.js, test/helpers.js   70 tests; helpers hold the EIP-712 type definitions a backend should mirror
+test/BountyEscrow.js, test/helpers.js   72 tests; helpers hold the EIP-712 type definitions a backend should mirror
 scripts/deploy.js                   deployment script (env-driven, guards chain id and token)
 .env.example                        variables read by hardhat.config.js / deploy.js (no secrets committed)
 ```
@@ -40,7 +40,7 @@ scripts/deploy.js                   deployment script (env-driven, guards chain 
 cd contracts
 npm install
 npx hardhat compile
-npx hardhat test          # 70 passing
+npx hardhat test          # 72 passing
 ```
 
 Deploy (test key only, never commit `.env`):
@@ -160,7 +160,7 @@ own `DOMAIN_SEPARATOR()`; do not rely on `version()` (it reverts on the live tok
 
 ## What was verified, and how
 
-* `npx hardhat compile` and `npx hardhat test`: 70 passing against local mocks. Quick mutation checks (removing
+* `npx hardhat compile` and `npx hardhat test`: 72 passing against local mocks. Quick mutation checks (removing
   `nonReentrant` on `settle`, the recipient/amount/criteria check, signature verification, the `Paid` status write) each
   made tests fail, so the suite is not vacuous.
 * Read-only checks against the live Whitechain Sepolia RPC (no transactions sent):
