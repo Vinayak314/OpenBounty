@@ -78,3 +78,9 @@
   0%, 60% { background-color: rgba(56, 189, 248, 0.18); }
   100% { background-color: transparent; }
 }
+
+@keyframes wiggle {
+  0%, 100% { transform: rotate(0); }
+  25% { transform: rotate(14deg); }
+  60% { transform: rotate(-12deg); }
+}

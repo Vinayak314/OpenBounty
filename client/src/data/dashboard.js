@@ -39,6 +39,7 @@ export const dashboardStats = [
     label: "USDC earned",
     value: "1,840",
     caption: "Across your contributions",
+    href: "/profile",
   },
   {
     id: "bounties-completed",
@@ -46,6 +47,7 @@ export const dashboardStats = [
     label: "Bounties completed",
     value: "12",
     caption: "Work that made a difference",
+    href: "/profile",
   },
   {
     id: "projects",
@@ -53,6 +55,7 @@ export const dashboardStats = [
     label: "Your projects",
     value: "3",
     caption: "Communities you’re growing",
+    href: "#projects",
   },
 ];
 
@@ -130,3 +133,19 @@ export const dashboardNextReview = {
   actionLabel: "View report →",
   href: "/project",
 };
+
+export const roleFilters = ["All roles", "Owner", "Maintainer", "Contributor"];
+
+/** Sample repositories offered by the "Add from GitHub" picker (no live GitHub call). */
+export const availableRepos = [
+  { id: "open-forms", name: "Open Forms", repo: "acme / open-forms", description: "Accessible form building blocks for any stack.", icon: "book-open" },
+  { id: "river-cli", name: "River CLI", repo: "river-dev / river-cli", description: "Command-line companion to River SDK.", icon: "waves" },
+  { id: "canopy-docs", name: "Canopy Docs", repo: "canopy-labs / canopy-docs", description: "Guides and recipes for Canopy UI.", icon: "sprout" },
+  { id: "garden-tools", name: "Garden Tools", repo: "docs-garden / tools", description: "Linting and publishing tools for handbooks.", icon: "book-open" },
+];
+
+export const notifications = [
+  { id: "n1", title: "Review ready", body: "Canopy UI · #42 Keyboard navigation", to: "/project", time: "2m" },
+  { id: "n2", title: "Payout approved", body: "Docs Garden · 120 USDC", to: "/profile", time: "1h" },
+  { id: "n3", title: "New bounty", body: "River SDK · Add retry helpers", to: "/project", time: "3h" },
+];

@@ -1,4 +1,4 @@
-import { NavLink } from "react-router-dom";
+import { Link, NavLink } from "react-router-dom";
 import { CircleHelp, LayoutDashboard, Sprout, UserRound } from "lucide-react";
 import logoMark from "@/assets/app/logo-mark.svg";
 import { cn } from "@/lib/utils";
@@ -82,8 +82,8 @@ export default function AppSidebar({ active, variant = "default", width }) {
         v.root,
       )}
     >
-      <div className="flex items-center gap-[10px]">
-        <span className="flex size-[34px] shrink-0 items-center justify-center rounded-full bg-ob-line">
+      <Link to="/" aria-label="OpenBounty home" className="group flex items-center gap-[10px] outline-none">
+        <span className="flex size-[34px] shrink-0 items-center justify-center rounded-full bg-ob-line transition-transform duration-300 group-hover:rotate-[20deg] group-hover:scale-110">
           <img src={logoMark} alt="" className="size-[25px]" />
         </span>
         <span
@@ -94,7 +94,7 @@ export default function AppSidebar({ active, variant = "default", width }) {
         >
           OpenBounty
         </span>
-      </div>
+      </Link>
 
       <nav aria-label="Main" className={cn("flex flex-col", v.nav)}>
         {navItems.map((item) => {
@@ -106,7 +106,7 @@ export default function AppSidebar({ active, variant = "default", width }) {
               className={({ isActive }) => {
                 const on = active ? item.id === active : isActive;
                 return cn(
-                  "flex items-center gap-3 px-3 transition-colors hover:bg-[#0f2a5a]/60",
+                  "group flex items-center gap-3 px-3 transition-all duration-200 hover:translate-x-1 hover:bg-[#0f2a5a]/60 active:scale-[0.98]",
                   v.item,
                   v.itemText,
                   on ? v.activeItem : v.inactiveItem,
@@ -120,7 +120,7 @@ export default function AppSidebar({ active, variant = "default", width }) {
                     <Icon
                       {...iconProps}
                       size={v.iconSize}
-                      className={cn("shrink-0", on ? v.activeIcon : v.inactiveIcon)}
+                      className={cn("shrink-0 transition-transform duration-200 group-hover:scale-110", on ? v.activeIcon : v.inactiveIcon)}
                     />
                     {item.label}
                   </>
@@ -132,18 +132,18 @@ export default function AppSidebar({ active, variant = "default", width }) {
       </nav>
 
       {v.showNote && (
-        <div className="flex flex-col gap-[10px] rounded-[14px] border border-[#294064] p-4">
-          <Sprout {...iconProps} size={25} className="text-white" />
+        <Link to="/project" className="group flex flex-col gap-[10px] rounded-[14px] border border-[#294064] p-4 outline-none transition-all duration-200 hover:-translate-y-1 hover:border-[#4a6591] hover:bg-[#0f2a5a]/50 focus-visible:ring-2 focus-visible:ring-white/50">
+          <Sprout {...iconProps} size={25} className="text-white transition-transform duration-300 group-hover:-rotate-12 group-hover:scale-125" />
           <p className="font-serif text-xl leading-[normal] text-[#f8fafc]">{sidebarNote.title}</p>
           <p className="text-[11px] leading-[1.6] text-[#cbd5e1]">{sidebarNote.body}</p>
-        </div>
+        </Link>
       )}
 
       <div className="absolute bottom-7 left-5 right-5 flex flex-col gap-4">
-        <div className={cn("flex items-center", v.helpGap)}>
-          <CircleHelp {...iconProps} size={v.helpIconSize} className={v.helpColor} />
-          <span className={cn("text-xs", v.helpColor)}>{v.helpLabel}</span>
-        </div>
+        <Link to="/project" className={cn("group flex items-center transition-colors hover:text-white", v.helpGap, v.helpColor)}>
+          <CircleHelp {...iconProps} size={v.helpIconSize} className="transition-transform duration-200 group-hover:rotate-12 group-hover:scale-110" />
+          <span className="text-xs group-hover:underline">{v.helpLabel}</span>
+        </Link>
         <div className="flex min-w-0 items-center gap-[10px]">
           {githubUrl ? (
             <a href={githubUrl} target="_blank" rel="noreferrer" aria-label="Open GitHub profile">
@@ -154,7 +154,7 @@ export default function AppSidebar({ active, variant = "default", width }) {
             <span title={name} className="truncate text-xs font-semibold text-[#f8fafc]">{name}</span>
             {githubUrl ? <a title={handle} href={githubUrl} target="_blank" rel="noreferrer" className={cn("truncate text-[10px] hover:underline", v.handleColor)}>{handle}</a> : <span title={handle} className={cn("truncate text-[10px]", v.handleColor)}>{handle}</span>}
           </div>
-          <button type="button" onClick={() => signOut(auth)} className="shrink-0 text-[10px] text-[#cbd5e1] hover:text-white">Sign out</button>
+          <button type="button" onClick={() => signOut(auth)} className="shrink-0 rounded px-1 text-[10px] text-[#cbd5e1] transition-colors hover:bg-white/10 hover:text-white active:scale-95">Sign out</button>
         </div>
       </div>
     </aside>
