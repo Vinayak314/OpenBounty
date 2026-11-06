@@ -99,6 +99,35 @@ router.put("/github", async (req, res) => {
   }
 });
 
+// Public GitHub profile stats, fetched with the server token (the browser's unauthenticated 60/h limit runs out fast).
+const PROFILE_TTL_MS = 10 * 60 * 1000;
+const profileCache = new Map(); // lowercased login -> { at, value }
+
+router.get("/github/profile", async (req, res) => {
+  const username = typeof req.query.username === "string" ? req.query.username.trim() : "";
+  if (!/^[a-zA-Z0-9-]{1,39}$/.test(username)) return res.status(400).json({ error: "A valid GitHub username is required." });
+  const key = username.toLowerCase();
+  const cached = profileCache.get(key);
+  if (cached && Date.now() - cached.at < PROFILE_TTL_MS) return res.json({ profile: cached.value });
+  try {
+    const response = await fetch(`https://api.github.com/users/${encodeURIComponent(username)}`, { headers: githubHeaders(), signal: AbortSignal.timeout(10000) });
+    if (response.status === 404) return res.status(404).json({ error: "GitHub user not found." });
+    if (response.status === 403 || response.status === 429) return res.status(503).json({ error: "GitHub is rate limiting OpenBounty. Try again in a few minutes." });
+    if (!response.ok) return res.status(502).json({ error: "Could not load the public GitHub profile." });
+    const github = await response.json();
+    const value = {
+      login: github.login, name: github.name || "", bio: github.bio || "", avatar_url: github.avatar_url, html_url: github.html_url,
+      public_repos: github.public_repos, followers: github.followers, following: github.following, created_at: github.created_at,
+    };
+    if (profileCache.size >= 500) profileCache.delete(profileCache.keys().next().value);
+    profileCache.set(key, { at: Date.now(), value });
+    res.json({ profile: value });
+  } catch (error) {
+    console.error("Could not load GitHub profile:", error.message);
+    res.status(502).json({ error: "Could not load the public GitHub profile." });
+  }
+});
+
 router.get("/github/repositories", async (req, res) => {
   if (!ensureDatabase(res)) return;
   try {

@@ -274,8 +274,7 @@ export default function ChatThread({ messages, typing, loading, query, onReact, 
 
   return (
     <div className="relative min-h-0 flex-1">
-      <div ref={scroller} onScroll={onScroll} id="general" className="h-full overflow-y-auto scroll-smooth px-6 pb-4 pt-[14px]">
-        <div className="sticky top-0 z-10 -mx-1 bg-[#f8fafc] px-1 pb-3"><div className="rounded-[10px] border border-ob-line bg-white px-3 py-2 text-[11px] text-ob-slate">Project conversation</div></div>
+      <div ref={scroller} onScroll={onScroll} className="h-full overflow-y-auto scroll-smooth px-6 pb-4 pt-[14px]">
         <div className="flex flex-col gap-5">
           {messages.length > 0 && <p className="text-center text-[10px] text-ob-slate">{new Date().toLocaleDateString()}</p>}
           {loading && <p className="py-10 text-center text-[12px] text-ob-slate">Loading project messages…</p>}

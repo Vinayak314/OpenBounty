@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { apiRequest } from "@/lib/api";
 
 function activityFromContributions(response) {
   const contributions = [...response.contributions].sort((a, b) => a.date.localeCompare(b.date));
@@ -74,21 +75,15 @@ export function useGithubProfile(username) {
     async function load() {
       try {
         const [profileResult, contributionResult] = await Promise.allSettled([
-          fetch(`https://api.github.com/users/${encodedUsername}`, {
-            headers: { Accept: "application/vnd.github+json" },
-            signal: controller.signal,
-          }),
+          // Through the OpenBounty server, which uses its GitHub token (the browser's anonymous limit is 60/h).
+          apiRequest(`/me/github/profile?username=${encodedUsername}`, { signal: controller.signal }),
           fetch(`https://github-contributions-api.jogruber.de/v4/${encodedUsername}?y=last`, {
             signal: controller.signal,
           }),
         ]);
 
         if (profileResult.status === "rejected") throw profileResult.reason;
-        const profileResponse = profileResult.value;
-        if (!profileResponse.ok) {
-          throw new Error(profileResponse.status === 404 ? "GitHub user not found." : "Could not load the public GitHub profile.");
-        }
-        const profile = await profileResponse.json();
+        const { profile } = profileResult.value;
         let activity = null;
         let activityError = "";
         try {

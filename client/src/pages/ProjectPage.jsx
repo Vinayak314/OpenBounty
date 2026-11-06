@@ -1,12 +1,11 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import ProjectSidebar from "@/components/project/ProjectSidebar";
+import { VIEWS } from "@/components/project/views";
 import ChannelHeader from "@/components/project/ChannelHeader";
 import ChatThread from "@/components/project/ChatThread";
 import Composer from "@/components/project/Composer";
 import ProjectRail from "@/components/project/ProjectRail";
-import ReviewPanel from "@/components/project/ReviewPanel";
-import CriteriaPanel from "@/components/project/CriteriaPanel";
 import AgentActivityPanel from "@/components/project/AgentActivityPanel";
 import BountyBoard from "@/components/project/BountyBoard";
 import { useChat } from "@/hooks/useChat";
@@ -56,23 +55,13 @@ function ProjectWorkspace({ slug }) {
 
   return (
     <div className="flex h-screen min-h-0 overflow-hidden bg-[#f8fafc] font-sans leading-[normal] text-ob-navy">
-      <ProjectSidebar project={project} />
+      <ProjectSidebar project={project} view={view} onView={(next) => { setView(next); if (next !== "chat") setQuery(""); }} />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <ChannelHeader project={project} query={query} onQuery={setQuery} sound={chat.sound} onToggleSound={() => chat.setSound((value) => !value)} connectionStatus={chat.connectionStatus} />
+        <ChannelHeader title={VIEWS.find((v) => v.id === view)?.label} view={view} query={query} onQuery={setQuery} sound={chat.sound} onToggleSound={() => chat.setSound((value) => !value)} connectionStatus={chat.connectionStatus} />
         <div className="flex min-h-0 flex-1">
           <main className="flex min-h-0 min-w-0 flex-1 flex-col">
-            <nav className="flex gap-2 border-b border-ob-line bg-white px-6 py-2" aria-label="Workspace views">
-              {[["chat", "Chat"], ["bounties", "Bounties"], ["criteria", "Criteria"], ["reviews", "PR reviews"], ["activity", "0G activity"]].map(([id, label]) => (
-                <button key={id} type="button" aria-pressed={view === id} onClick={() => setView(id)}
-                  className={`rounded-lg px-3 py-2 text-xs font-semibold ${view === id ? "bg-ob-navy text-white" : "text-ob-slate hover:bg-ob-mist"}`}>
-                  {label}
-                </button>
-              ))}
-            </nav>
             {view === "bounties" ? <BountyBoard slug={slug} canMaintain={project.canMaintain} />
-              : view === "reviews" ? <ReviewPanel slug={slug} />
-              : view === "criteria" ? <CriteriaPanel slug={slug} />
-                : view === "activity" ? <AgentActivityPanel slug={slug} /> : <>
+              : view === "activity" ? <AgentActivityPanel slug={slug} /> : <>
             {chat.error && <p role="alert" className="border-b border-amber-200 bg-amber-50 px-6 py-2 text-xs text-amber-900">{chat.error}</p>}
             <ChatThread
               messages={chat.messages}
