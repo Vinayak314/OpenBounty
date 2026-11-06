@@ -1,4 +1,4 @@
-/** Per-project USDC totals. `data` matches projectEarnings in src/data/profile.js. */
+/** Per-project USDT totals. `data` matches projectEarnings in src/data/profile.js. */
 export default function ProjectEarnings({ data }) {
   return (
     <section className="flex w-[300px] shrink-0 flex-col gap-[18px] rounded-xl border border-ob-line bg-white p-[22px]">

@@ -20,7 +20,7 @@ export const SAMPLES = {
   },
   payoutSuccess: {
     heading: "Impact, rewarded.",
-    amount: "120 USDC",
+    amount: "120 USDT",
     lines: ["#38 · Improve empty states", "Sent to Kavya’s connected wallet."],
     caption: "Payout success · Illustrative end state",
   },

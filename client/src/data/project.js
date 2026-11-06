@@ -34,7 +34,7 @@ export const CHANNEL = {
   id: "general",
   name: "general",
   project: "Canopy UI",
-  pinned: { text: "Pinned: #42 · 250 USDC · 3 criteria", action: "View" },
+  pinned: { text: "Pinned: #42 · 250 USDT · 3 criteria", action: "View" },
   dateLabel: "Today · Nov 5",
   composerPlaceholder: "Message #general or ask @Bounty agent...",
   composerHint: "Markdown",
@@ -102,13 +102,13 @@ export const MESSAGES = [
     author: { name: "Priya Kumar", initials: "PK", color: "navy" },
     time: "10:14",
     variant: "filled",
-    body: "Thanks! I’ll verify the NVDA recording when it’s ready. Separately, #38 is approved: all empty-state criteria passed. The 120 USDC payout is ready for a maintainer.",
+    body: "Thanks! I’ll verify the NVDA recording when it’s ready. Separately, #38 is approved: all empty-state criteria passed. The 120 USDT payout is ready for a maintainer.",
   },
 ];
 
 export const LEADERBOARD = {
   title: "Leaderboard",
-  subtitle: "Canopy UI · All-time USDC",
+  subtitle: "Canopy UI · All-time USDT",
   entries: [
     { rank: 1, name: "Maya Iyer", initials: "MI", color: "pink", amount: "1,460" },
     { rank: 2, name: "Ananya Shah", initials: "AS", color: "orange", amount: "1,140" },
@@ -120,7 +120,7 @@ export const LEADERBOARD = {
 export const TASKS = {
   title: "Tasks",
   createLabel: "Create bounty",
-  footnote: "Illustrative USDC values. Approvals require maintainer review and wallet confirmation.",
+  footnote: "Illustrative USDT values. Approvals require maintainer review and wallet confirmation.",
   items: [
     { id: "51", status: "Open", title: "Add dark-mode tokens", detail: "Available to claim", amount: 150, action: { label: "Claim", kind: "primary" } },
     { id: "47", status: "Claimed", title: "Fix modal focus trap", detail: "Maya Iyer · @maya-builds", amount: 200, action: { label: "Claimed by Maya", kind: "disabled" } },

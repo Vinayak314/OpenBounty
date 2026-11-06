@@ -13,7 +13,7 @@ export const dashboardGreeting = {
   action: { label: "Add from GitHub", icon: "github" },
 };
 export const dashboardStats = [
-  { id: "usdc-earned", icon: "wallet", label: "USDC earned", value: "—", caption: "Across your contributions", href: "/profile" },
+  { id: "usdt-earned", icon: "wallet", label: "USDT earned", value: "—", caption: "Across your contributions", href: "/profile" },
   { id: "bounties-completed", icon: "circle-check", label: "Bounties completed", value: "—", caption: "Work that made a difference", href: "/profile" },
   { id: "projects", icon: "sprout", label: "Your projects", value: "0", caption: "Repositories added to OpenBounty", href: "#projects" },
 ];

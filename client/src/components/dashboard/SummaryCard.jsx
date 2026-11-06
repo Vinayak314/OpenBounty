@@ -34,12 +34,10 @@ export default function SummaryCard({ stat }) {
   const inner = (
     <>
       <Icon {...iconProps} size={26} className="shrink-0 text-ob-navy transition-transform duration-300 group-hover:scale-110 group-hover:-rotate-6" />
-      <div className="flex flex-col gap-1.5 whitespace-nowrap leading-[normal]">
-        <span className="text-[11px] text-ob-slate">{stat.label}</span>
-        <div className="flex items-baseline gap-3">
-          <span className="font-serif text-[30px] tabular-nums text-ob-navy">{value}</span>
-          <span className="text-[10px] text-ob-slate">{stat.caption}</span>
-        </div>
+      <div className="flex min-w-0 flex-1 flex-col gap-1 leading-[normal]">
+        <span className="truncate text-[11px] text-ob-slate">{stat.label}</span>
+        <span className="font-serif text-[30px] leading-none tabular-nums text-ob-navy">{value}</span>
+        <span className="text-[10px] leading-snug text-ob-slate">{stat.caption}</span>
       </div>
       <ArrowUpRight {...iconProps} size={16} className="absolute right-3 top-3 -translate-x-1 translate-y-1 text-ob-slate opacity-0 transition-all duration-200 group-hover:translate-x-0 group-hover:translate-y-0 group-hover:opacity-100" />
     </>

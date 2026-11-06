@@ -14,7 +14,7 @@ export const profile = {
 
 export const profileStats = [
   { id: "bounties", label: "Bounties completed", value: "12", caption: "Across 3 communities" },
-  { id: "earned", label: "USDC earned", value: "1,840", caption: "Lifetime payouts" },
+  { id: "earned", label: "USDT earned", value: "1,840", caption: "Lifetime payouts" },
   { id: "projects", label: "Projects", value: "3", caption: "Open-source communities" },
   { id: "reviews", label: "Reviews passed", value: "14", caption: "Reviewed by maintainers" },
 ];
@@ -90,9 +90,9 @@ export const recentBounties = {
   title: "Recent bounties",
   statusLabel: "Completed",
   items: [
-    { id: "35", title: "#35 · Fix tooltip contrast", meta: "Canopy UI · Nov 3", amount: "180 USDC", status: "Paid" },
-    { id: "28", title: "#28 · Retry middleware", meta: "River SDK · Oct 29", amount: "220 USDC", status: "Paid" },
-    { id: "19", title: "#19 · Contributor quickstart", meta: "Docs Garden · Oct 24", amount: "100 USDC", status: "Paid" },
+    { id: "35", title: "#35 · Fix tooltip contrast", meta: "Canopy UI · Nov 3", amount: "180 USDT", status: "Paid" },
+    { id: "28", title: "#28 · Retry middleware", meta: "River SDK · Oct 29", amount: "220 USDT", status: "Paid" },
+    { id: "19", title: "#19 · Contributor quickstart", meta: "Docs Garden · Oct 24", amount: "100 USDT", status: "Paid" },
   ],
 };
 

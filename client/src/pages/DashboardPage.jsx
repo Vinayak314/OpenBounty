@@ -167,9 +167,9 @@ export default function DashboardPage() {
             </ul>}
           </section>
 
-          <section className="flex gap-4 py-2" aria-label="Summary">
+          <section className="flex flex-wrap gap-4 py-2" aria-label="Summary">
             {dashboardStats.map((stat, i) => (
-              <div key={stat.id} className="flex min-w-0 flex-1 animate-[rise_.4s_ease-out_both]" style={{ animationDelay: `${i * 80}ms` }}>
+              <div key={stat.id} className="flex min-w-0 flex-1 basis-[200px] animate-[rise_.4s_ease-out_both]" style={{ animationDelay: `${i * 80}ms` }}>
                 <SummaryCard stat={{ ...stat, ...(stat.id === "projects" ? { value: String(projects.length) } : {}) }} />
               </div>
             ))}
