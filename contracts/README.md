@@ -260,4 +260,4 @@ Network parameters: <https://docs.whitechain.io/learn/network/testnet>. Hardhat 
 <https://docs.whitechain.io/build/deploy/deploy-with-hardhat>. Viem usage (`whitechainSepolia` in
 `viem/chains`): <https://docs.whitechain.io/build/dapps/use-viem>. Track requirements (designated USDT, explorer
 verification, README line on stablecoin settlement, `WHITECHAIN_FEEDBACK.md`, gasless payer for Scale):
-<https://ethglobal.com/events/mumbai/prizes>. Product spec: `OpenBounty-SRS.md`, `OpenBounty-Project-Overview.md`.
+<https://ethglobal.com/events/mumbai/prizes>.

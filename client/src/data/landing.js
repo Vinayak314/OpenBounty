@@ -18,7 +18,7 @@ export const HERO = {
 export const HOW_IT_WORKS_STEPS = [
   { id: "approve", number: "01", title: "Approve criteria", description: "Agree on what done looks like." },
   { id: "review", number: "02", title: "AI evidence review", description: "See the proof, not just a promise." },
-  { id: "payout", number: "03", title: "USDC payout", description: "Reward work that makes an impact." },
+  { id: "payout", number: "03", title: "USDT payout", description: "Reward work that makes an impact." },
 ];
 
 export const SHARED_SPACE = {
@@ -56,7 +56,7 @@ export const CONVERSATION_PREVIEW = {
   agreement: {
     issue: "#42 · Keyboard navigation",
     meta: "3 criteria · 1 shared agreement",
-    reward: "250 USDC",
+    reward: "250 USDT",
   },
 };
 
@@ -91,8 +91,8 @@ export const PRINCIPLES = [
     number: "03",
     title: "Impact, rewarded.",
     description:
-      "Once the maintainer approves, contributors receive USDC in their wallet. A transparent record of work well done.",
-    tag: "USDC rewards on Base",
+      "Once the maintainer approves, contributors receive USDT in their payment account. A transparent record of work well done.",
+    tag: "USDT rewards on Whitechain",
   },
 ];
 
