@@ -36,6 +36,7 @@ test/BountyEscrow.js, test/helpers.js   escrow tests; helpers hold the EIP-712 t
 scripts/deploy.js                   escrow deployment script (env-driven, guards chain id and token)
 scripts/deployAccountFactory.js     passkey account factory deployment (deploy this first)
 scripts/transferOwnership.js        start a two-step escrow ownership transfer to a passkey account
+scripts/mintMockUsdt.js             LOCAL ONLY: mint MockUSDT for dry runs
 test/PasskeyAccount.js, test/webauthn.js  passkey accounts end to end with the backend's encoders and a test authenticator
 .env.example                        variables read by hardhat.config.js / deploy.js (no secrets committed)
 ```

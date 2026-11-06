@@ -4,6 +4,8 @@ OpenBounty gives open-source teams a workspace for agreeing on acceptance criter
 
 ## Run locally
 
+Full step-by-step instructions for testing and deploying (local chain, Whitechain Sepolia, hosting, GitHub webhook, acceptance run) are in [TESTING_AND_DEPLOYMENT.md](TESTING_AND_DEPLOYMENT.md). What is done and what is left is tracked in [TODO.md](TODO.md).
+
 Use Node.js 22 or newer, MongoDB, the project's Firebase Authentication setup with GitHub sign-in, and a 0G Private Computer API key. Payments additionally need the deployed contracts and two test keys (see [Set up payments](#set-up-payments)).
 
 ```sh
