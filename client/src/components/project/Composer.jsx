@@ -33,10 +33,12 @@ export default function Composer({ onSend, onTyping, replyTo, onCancelReply, edi
   const [emoji, setEmoji] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [active, setActive] = useState(0);
+  const [sending, setSending] = useState(false);
   const area = useRef(null);
   const fileInput = useRef(null);
   const emojiRef = useRef(null);
   const savedDraft = useRef(null);
+  const submitting = useRef(false);
 
   const canSend = text.trim().length > 0 || (!editing && files.length > 0);
 
@@ -137,14 +139,20 @@ export default function Composer({ onSend, onTyping, replyTo, onCancelReply, edi
   };
 
   const submit = async () => {
-    if (!canSend) return;
+    if (!canSend || submitting.current) return;
+    submitting.current = true;
+    setSending(true);
     onTyping?.(false);
-    if (editing) return onSaveEdit(text.trim());
-    const sent = await onSend(text.trim(), files);
-    if (sent === false) return;
-    setText("");
-    setFiles([]);
-    setCaret(0);
+    try {
+      if (editing) return await onSaveEdit(text.trim());
+      const sent = await onSend(text.trim(), files);
+      if (sent === false) return;
+      setText((current) => current === text ? "" : current);
+      setFiles((current) => current === files ? [] : current.filter((file) => !files.includes(file)));
+    } finally {
+      submitting.current = false;
+      setSending(false);
+    }
   };
 
   const onKeyDown = (e) => {
@@ -234,6 +242,7 @@ export default function Composer({ onSend, onTyping, replyTo, onCancelReply, edi
           )}
           <textarea
             ref={area}
+            autoFocus
             rows={1}
             value={text}
             onChange={(e) => {
@@ -284,7 +293,7 @@ export default function Composer({ onSend, onTyping, replyTo, onCancelReply, edi
             <button
               type="button"
               onClick={submit}
-              disabled={!canSend}
+              disabled={!canSend || sending}
               className="flex h-8 w-[74px] items-center justify-center gap-[6px] rounded-[8px] bg-ob-navy text-[11px] font-semibold text-white transition-all duration-150 enabled:hover:bg-[#0f2a5e] enabled:active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <ArrowUp className="size-[14px]" strokeWidth={2} /> {editing ? "Save" : "Send"}

@@ -11,8 +11,13 @@ const safe = (fn, fallback) => { try { return fn(); } catch { return fallback; }
 export const COMMANDS = [];
 
 function upsertMessage(current, message) {
-  const index = current.findIndex((item) => item.id === message.id);
+  const index = current.findIndex((item) => item.id === message.id || (
+    message.clientMessageId && item.clientMessageId === message.clientMessageId
+    && item.authorUid === message.authorUid && (item.status === "sending" || message.status === "sending")
+  ));
   if (index === -1) return [...current, message];
+  // A socket echo, POST response or history fetch may confirm the same send first.
+  if (current[index].status !== "sending") return current;
   const next = [...current];
   next[index] = { ...next[index], ...message };
   return next;
@@ -23,25 +28,41 @@ export function useChat(projectSlug) {
   const [loading, setLoading] = useState(Boolean(projectSlug));
   const [typing, setTyping] = useState(null);
   const [error, setError] = useState("");
+  const [historyError, setHistoryError] = useState("");
   const [connectionStatus, setConnectionStatus] = useState("connecting");
   const [sound, setSound] = useState(() => safe(() => localStorage.getItem(SOUND_KEY) !== "off", true));
   const socketRef = useRef(null);
+  const historyRequest = useRef(null);
   const deletedIds = useRef(new Set());
   const typingSent = useRef(false);
 
+  const updateMessages = useCallback((update) => {
+    historyRequest.current?.updates.push(update);
+    setMessages(update);
+  }, []);
+
   const refresh = useCallback(async () => {
-    if (!projectSlug) return;
+    if (!projectSlug || historyRequest.current) return;
+    const request = { controller: new AbortController(), updates: [] };
+    historyRequest.current = request;
     try {
-      const result = await apiRequest(`/projects/${encodeURIComponent(projectSlug)}/messages`);
-      setMessages((current) => {
-        const merged = result.messages.filter((message) => !deletedIds.current.has(message.id));
-        return current.reduce(upsertMessage, merged);
+      const result = await apiRequest(`/projects/${encodeURIComponent(projectSlug)}/messages`, {
+        signal: request.controller.signal,
       });
-      setError("");
+      if (historyRequest.current !== request) return;
+      setMessages((current) => {
+        const pending = current.filter((message) => message.status === "sending");
+        const snapshot = result.messages.filter((message) => !deletedIds.current.has(message.id));
+        return request.updates.reduce((messages, update) => update(messages), pending.reduce(upsertMessage, snapshot));
+      });
+      setHistoryError("");
     } catch (loadError) {
-      setError(loadError.message);
+      if (historyRequest.current === request) setHistoryError(loadError.message);
     } finally {
-      setLoading(false);
+      if (historyRequest.current === request) {
+        historyRequest.current = null;
+        setLoading(false);
+      }
     }
   }, [projectSlug]);
 
@@ -49,13 +70,40 @@ export function useChat(projectSlug) {
     setMessages([]);
     setLoading(Boolean(projectSlug));
     setTyping(null);
-    deletedIds.current.clear();
     typingSent.current = false;
     if (!projectSlug) return undefined;
 
     let disposed = false;
     let socket;
+    let joined = false;
+    let joining = false;
     setConnectionStatus("connecting");
+
+    function join() {
+      if (!socket?.connected || joined || joining) return;
+      joining = true;
+      socket.timeout(5000).emit("project:join", { slug: projectSlug }, (err, result) => {
+        joining = false;
+        if (disposed || !socket.connected) return;
+        joined = !err && result?.ok === true;
+        setConnectionStatus(joined ? "connected" : "offline");
+        // If an initial history request raced with room entry, fetch again once it finishes.
+        if (joined) {
+          historyRequest.current?.controller.abort();
+          historyRequest.current = null;
+          refresh();
+        }
+      });
+    }
+
+    const catchUp = () => {
+      if (document.visibilityState === "hidden") return;
+      if (socket && !socket.active) socket.connect();
+      join();
+      refresh();
+    };
+    const fallback = window.setInterval(() => { if (!joined) catchUp(); }, 5000);
+    window.addEventListener("focus", catchUp);
     refresh();
 
     async function connect() {
@@ -65,7 +113,8 @@ export function useChat(projectSlug) {
 
         socket = io(API_URL, {
           auth: (callback) => {
-            auth.currentUser?.getIdToken()
+            if (!auth.currentUser) return callback({ token: "" });
+            auth.currentUser.getIdToken()
               .then((token) => callback({ token }))
               .catch(() => callback({ token: "" }));
           },
@@ -74,41 +123,34 @@ export function useChat(projectSlug) {
 
         socket.on("connect", () => {
           setConnectionStatus("connecting");
-          socket.emit("project:join", { slug: projectSlug }, (result) => {
-            if (!result?.ok) {
-              setConnectionStatus("offline");
-              setError(result?.error || "Could not join project chat.");
-              return;
-            }
-            setConnectionStatus("connected");
-            setError("");
-            refresh();
-          });
+          join();
         });
         socket.on("disconnect", () => {
+          joined = false;
+          joining = false;
           setConnectionStatus("reconnecting");
           setTyping(null);
         });
-        socket.on("connect_error", (connectError) => {
+        socket.on("connect_error", () => {
           setConnectionStatus("offline");
-          setError(connectError.message || "Live chat is unavailable.");
         });
         socket.on("chat:message-created", (message) => {
-          const normalized = { ...message, me: message.authorUid === auth.currentUser?.uid };
-          setMessages((current) => upsertMessage(current, normalized));
+          if (deletedIds.current.has(message.id)) return;
+          const me = message.authorUid === auth.currentUser?.uid;
+          updateMessages((current) => upsertMessage(current, { ...message, me, status: me ? "sent" : undefined }));
         });
         socket.on("chat:message-updated", (message) => {
-          setMessages((current) => current.map((item) => item.id === message.id
+          updateMessages((current) => current.map((item) => item.id === message.id
             ? { ...item, body: message.body, edited: message.edited }
             : item));
         });
         socket.on("chat:message-deleted", ({ id }) => {
           deletedIds.current.add(id);
-          setMessages((current) => current.filter((message) => message.id !== id));
+          updateMessages((current) => current.filter((message) => message.id !== id));
         });
         socket.on("chat:reaction-updated", (update) => {
           const myReaction = update.userId === auth.currentUser?.uid;
-          setMessages((current) => current.map((message) => {
+          updateMessages((current) => current.map((message) => {
             if (message.id !== update.id) return message;
             const reactions = { ...(message.reactions || {}) };
             if (update.count <= 0) delete reactions[update.emoji];
@@ -135,55 +177,74 @@ export function useChat(projectSlug) {
     connect();
     return () => {
       disposed = true;
+      window.clearInterval(fallback);
+      window.removeEventListener("focus", catchUp);
+      historyRequest.current?.controller.abort();
+      historyRequest.current = null;
       socketRef.current = null;
       socket?.disconnect();
     };
-  }, [projectSlug, refresh]);
+  }, [projectSlug, refresh, updateMessages]);
 
   useEffect(() => {
     safe(() => localStorage.setItem(SOUND_KEY, sound ? "on" : "off"));
   }, [sound]);
 
   const send = useCallback(async (body, attachments = [], replyTo = null) => {
-    if (!projectSlug) return;
+    if (!projectSlug || !auth.currentUser) return false;
+    const user = auth.currentUser;
+    const clientMessageId = Array.from(crypto.getRandomValues(new Uint8Array(16)),
+      (byte) => byte.toString(16).padStart(2, "0")).join("");
+    const name = user.displayName || "GitHub user";
+    const pending = {
+      id: clientMessageId, clientMessageId, authorUid: user.uid, type: "message",
+      author: { name, initials: name.split(/\s+/).filter(Boolean).slice(0, 2).map((word) => word[0]).join("").toUpperCase(), color: "orange" },
+      me: true, status: "sending", variant: "outlined",
+      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }),
+      body, attachments, replyTo, reactions: {},
+    };
+    updateMessages((current) => upsertMessage(current, pending));
     try {
       const result = await apiRequest(`/projects/${encodeURIComponent(projectSlug)}/messages`, {
         method: "POST",
-        body: { body, attachments, replyTo },
+        body: { body, attachments, replyTo, clientMessageId },
       });
-      setMessages((current) => upsertMessage(current, result.message));
+      updateMessages((current) => deletedIds.current.has(result.message.id)
+        ? current.filter((message) => message.id !== pending.id)
+        : upsertMessage(current, result.message));
       setError("");
       socketRef.current?.emit("chat:typing", { isTyping: false });
       typingSent.current = false;
       return true;
     } catch (sendError) {
+      updateMessages((current) => current.filter((message) => message.id !== pending.id));
       setError(sendError.message);
       return false;
     }
-  }, [projectSlug]);
+  }, [projectSlug, updateMessages]);
 
   const edit = useCallback(async (id, body) => {
     try {
       const result = await apiRequest(`/projects/${encodeURIComponent(projectSlug)}/messages/${encodeURIComponent(id)}`, { method: "PUT", body: { body } });
-      setMessages((current) => current.map((message) => message.id === id ? result.message : message));
+      updateMessages((current) => current.map((message) => message.id === id ? result.message : message));
       setError("");
       return true;
     } catch (editError) {
       setError(editError.message);
       return false;
     }
-  }, [projectSlug]);
+  }, [projectSlug, updateMessages]);
 
   const remove = useCallback(async (id) => {
     try {
       await apiRequest(`/projects/${encodeURIComponent(projectSlug)}/messages/${encodeURIComponent(id)}`, { method: "DELETE" });
       deletedIds.current.add(id);
-      setMessages((current) => current.filter((message) => message.id !== id));
+      updateMessages((current) => current.filter((message) => message.id !== id));
       setError("");
     } catch (removeError) {
       setError(removeError.message);
     }
-  }, [projectSlug]);
+  }, [projectSlug, updateMessages]);
 
   const react = useCallback(async (id, emoji) => {
     try {
@@ -191,12 +252,12 @@ export function useChat(projectSlug) {
         method: "PATCH",
         body: { emoji },
       });
-      setMessages((current) => current.map((message) => message.id === id ? result.message : message));
+      updateMessages((current) => current.map((message) => message.id === id ? result.message : message));
       setError("");
     } catch (reactionError) {
       setError(reactionError.message);
     }
-  }, [projectSlug]);
+  }, [projectSlug, updateMessages]);
 
   const typingActivity = useCallback((isTyping) => {
     if (typingSent.current === isTyping) return;
@@ -204,5 +265,5 @@ export function useChat(projectSlug) {
     socketRef.current?.emit("chat:typing", { isTyping });
   }, []);
 
-  return { messages, typing, loading, error, connectionStatus, sound, setSound, send, edit, remove, react, refresh, typingActivity };
+  return { messages, typing, loading, error: error || historyError, connectionStatus, sound, setSound, send, edit, remove, react, refresh, typingActivity };
 }

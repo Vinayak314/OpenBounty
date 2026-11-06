@@ -31,10 +31,12 @@ function messageResponse(message, firebaseUid) {
   const initials = authorName.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "GH";
   return {
     id: message.id,
+    clientMessageId: message.clientMessageId,
     authorUid: message.authorUid,
     type: "message",
     author: { name: authorName, initials, color: "orange", photoURL: message.authorPhoto },
     me: message.authorUid === firebaseUid,
+    status: message.authorUid === firebaseUid ? "sent" : undefined,
     time: new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }),
     variant: message.authorUid === firebaseUid ? "outlined" : "filled",
     body: message.body,
@@ -75,8 +77,8 @@ router.get("/:slug/messages", async (req, res) => {
   try {
     const project = await accessibleProject(req, res);
     if (!project) return;
-    const messages = await ChatMessage.find({ project: project._id }).sort({ createdAt: 1 }).limit(500);
-    res.json({ messages: messages.map((message) => messageResponse(message, req.firebaseUser.uid)) });
+    const messages = await ChatMessage.find({ project: project._id }).sort({ createdAt: -1, _id: -1 }).limit(500);
+    res.json({ messages: messages.reverse().map((message) => messageResponse(message, req.firebaseUser.uid)) });
   } catch (error) {
     console.error("Could not load project chat:", error.message);
     res.status(500).json({ error: "Could not load project messages." });
@@ -87,6 +89,11 @@ router.post("/:slug/messages", async (req, res) => {
   if (!ensureDatabase(res)) return;
   const body = typeof req.body?.body === "string" ? req.body.body.trim() : "";
   const rawAttachments = Array.isArray(req.body?.attachments) ? req.body.attachments : [];
+  const clientMessageId = req.body?.clientMessageId;
+  if (clientMessageId !== undefined && (typeof clientMessageId !== "string"
+    || !/^[0-9a-f]{32}$/.test(clientMessageId))) {
+    return res.status(400).json({ error: "Invalid message identifier." });
+  }
   if (!body && !rawAttachments.length) return res.status(400).json({ error: "Write a message or attach a file." });
   if (body.length > 10000 || rawAttachments.length > 5) return res.status(400).json({ error: "Messages can contain up to 10,000 characters and five attachments." });
   const attachments = rawAttachments.map((attachment) => ({
@@ -103,6 +110,7 @@ router.post("/:slug/messages", async (req, res) => {
       authorUid: req.firebaseUser.uid,
       authorName: req.firebaseUser.name || "GitHub user",
       authorPhoto: req.firebaseUser.picture || "",
+      clientMessageId,
       body,
       attachments,
       replyTo: req.body?.replyTo && typeof req.body.replyTo === "object" ? {

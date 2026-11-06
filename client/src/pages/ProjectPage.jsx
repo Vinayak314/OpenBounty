@@ -10,8 +10,12 @@ import { apiRequest } from "@/lib/api";
 
 export default function ProjectPage() {
   const { slug } = useParams();
-  const chat = useChat(slug);
+  return <ProjectWorkspace key={slug} slug={slug} />;
+}
+
+function ProjectWorkspace({ slug }) {
   const [project, setProject] = useState(null);
+  const chat = useChat(project?.slug);
   const [loading, setLoading] = useState(Boolean(slug));
   const [projectError, setProjectError] = useState("");
   const [query, setQuery] = useState("");
@@ -72,7 +76,7 @@ export default function ProjectPage() {
               projectName={project.name}
               onSend={async (text, files) => {
                 const sent = await chat.send(text, files, replyTo);
-                if (sent) setReplyTo(null);
+                if (sent) setReplyTo((current) => current === replyTo ? null : current);
                 return sent;
               }}
               onTyping={chat.typingActivity}

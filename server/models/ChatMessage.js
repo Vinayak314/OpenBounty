@@ -5,6 +5,7 @@ const ChatMessageSchema = new mongoose.Schema({
   authorUid: { type: String, required: true, index: true },
   authorName: { type: String, default: "GitHub user" },
   authorPhoto: { type: String, default: "" },
+  clientMessageId: { type: String, maxlength: 32 },
   body: { type: String, default: "", trim: true, maxlength: 10000 },
   attachments: [{
     name: { type: String, required: true, maxlength: 255 },

@@ -148,7 +148,7 @@ function Message({ m, actions, onJump }) {
   );
   return (
     <div className={`group relative flex items-start gap-[11px] ${m.me ? "flex-row-reverse" : ""}`}>
-      <Toolbar m={m} {...actions} />
+      {m.status !== "sending" && <Toolbar m={m} {...actions} />}
       {avatar}
       <div className={`min-w-0 ${m.type === "report" ? "flex-1" : "max-w-[78%]"} ${m.me ? "flex flex-col items-end" : ""}`}>
         <Byline m={m} />
