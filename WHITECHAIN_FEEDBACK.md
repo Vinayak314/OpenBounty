@@ -28,7 +28,7 @@
   Hardhat 2, so the config and verification setup had to be translated and is **untested until we deploy**.
 - We found no documented ERC-4337 bundler, paymaster or embedded-wallet provider for chain 1874, so we built our own
   gas sponsor (a relayer for passkey smart accounts) instead of a third-party provider.
-- **TODO:** anything hit during real deployment, contract verification (Sourcify vs Blockscout), or indexing events.
+- Verification: `hardhat verify` (v2) first failed because its Sourcify v1 endpoint has been removed upstream ("API v1 is removed") and `--constructor-args-path` is not recognised. With `SOURCIFY=false` and `--constructor-args <file>` both contracts verified on the Blockscout explorer. Deployment on chain 1874 and indexing of escrow events worked.
 
 ## What the docs were missing
 
@@ -37,7 +37,7 @@
 - Whether the designated USDT can pause or blacklist addresses, and who administers the proxy, so builders can state
   that risk accurately.
 - A documented, supported path for gas sponsorship / embedded wallets / paymasters on chain 1874. We used our own
-  relayer plus passkey accounts (below). **TODO:** state whether it worked on the live network after the demo run.
+  relayer plus passkey accounts (below). It worked on the live network: the sponsor paid gas for account creation, funding, claim acceptance, submission and the payout.
 - **TODO:** anything else.
 
 ## Gas sponsorship and abuse prevention (Scale track)
@@ -57,7 +57,7 @@ Built (tested locally end to end against a Hardhat node; **not yet run on Whitec
 
 ## Evidence links
 
-- Account factory deployment and verification: **TODO**
-- Escrow deployment and verification: **TODO**
-- Deposit transaction: **TODO**
-- Settlement (payout) transaction in the designated USDT: **TODO**
+- Account factory deployment and verification: [0x167E9A823e918d1994dce7E7BEd241aCc6525437](https://explorer.testnet.whitechain.io/address/0x167E9A823e918d1994dce7E7BEd241aCc6525437#code) (verified on Blockscout)
+- Escrow deployment and verification: [0x2DC1E6ecFaB39DB8212439570aBF25a803f37d83](https://explorer.testnet.whitechain.io/address/0x2DC1E6ecFaB39DB8212439570aBF25a803f37d83#code) (verified on Blockscout)
+- Deposit transaction: [0xab8671e83f9d621c0b1c19a16a42d82f2d3139c53a3028f33ca7f858c210b988](https://explorer.testnet.whitechain.io/tx/0xab8671e83f9d621c0b1c19a16a42d82f2d3139c53a3028f33ca7f858c210b988)
+- Settlement (payout) transaction in the designated USDT: [0xa6febed07edcd80bf2d8dd51ffbe5bdd67d32e648c0035d2566d25d2eb6290e1](https://explorer.testnet.whitechain.io/tx/0xa6febed07edcd80bf2d8dd51ffbe5bdd67d32e648c0035d2566d25d2eb6290e1) (1 USDT, maintainer account to contributor account)

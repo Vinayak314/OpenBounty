@@ -323,8 +323,8 @@ The log should say `Payments enabled on Whitechain Sepolia (escrow 0x...)`.
 
 ```bash
 cd contracts
-npx hardhat verify --network whitechainSepolia <factory address>
-npx hardhat verify --network whitechainSepolia --constructor-args-path deployments/whitechainSepolia.args.js <escrow address>
+SOURCIFY=false npx hardhat verify --network whitechainSepolia <factory address>
+SOURCIFY=false npx hardhat verify --network whitechainSepolia --constructor-args deployments/whitechainSepolia.args.js <escrow address>
 ```
 
 If `hardhat verify` fails, use the explorer's "Verify and publish" page with the compiler settings from `deployments/whitechainSepolia.json` (solc 0.8.28, optimizer 200 runs, viaIR, evm `cancun`). Record the outcome in `WHITECHAIN_FEEDBACK.md`.

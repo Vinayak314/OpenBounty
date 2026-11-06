@@ -144,9 +144,10 @@ Set `WEBAUTHN_RP_ID` to the client's hostname and `WEBAUTHN_ORIGINS` to its exac
 |---|---|
 | Network | Whitechain Sepolia (1874) |
 | USDT (designated) | `0xcedfB56113143d55b2358b8CFbB0dEB5Ad2f55a7` |
-| OpenBountyAccountFactory | _add after deploy_ |
-| BountyEscrow | _add after deploy_ |
-| Settlement (payout) transaction | _add explorer link of a real payout_ |
+| OpenBountyAccountFactory | [`0x167E9A823e918d1994dce7E7BEd241aCc6525437`](https://explorer.testnet.whitechain.io/address/0x167E9A823e918d1994dce7E7BEd241aCc6525437#code) (verified) |
+| BountyEscrow | [`0x2DC1E6ecFaB39DB8212439570aBF25a803f37d83`](https://explorer.testnet.whitechain.io/address/0x2DC1E6ecFaB39DB8212439570aBF25a803f37d83#code) (verified) |
+| Funding transaction (1 USDT) | [`0xab8671e8…`](https://explorer.testnet.whitechain.io/tx/0xab8671e83f9d621c0b1c19a16a42d82f2d3139c53a3028f33ca7f858c210b988) |
+| Settlement (payout) transaction (1 USDT) | [`0xa6febed0…`](https://explorer.testnet.whitechain.io/tx/0xa6febed07edcd80bf2d8dd51ffbe5bdd67d32e648c0035d2566d25d2eb6290e1) |
 
 ### Payment limitations
 
