@@ -13,8 +13,14 @@ const GroupSchema = new mongoose.Schema({
     joinedAt: { type: Date, default: Date.now },
   }],
   projects: [{ type: mongoose.Schema.Types.ObjectId, ref: "Project" }],
+  joinCode: { type: String, unique: true, sparse: true, select: false },
+  joinRequests: { select: false, type: [{
+    user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+    requestedAt: { type: Date, default: Date.now },
+  }] },
 }, { timestamps: true });
 
 GroupSchema.index({ "members.user": 1 });
+GroupSchema.index({ "joinRequests.user": 1 });
 
 module.exports = mongoose.models.Group || mongoose.model("Group", GroupSchema);

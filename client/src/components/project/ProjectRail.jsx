@@ -1,4 +1,5 @@
 import { ArrowUpRight, Github, Hash } from "lucide-react";
+import GroupInvites from "@/components/project/GroupInvites";
 
 export default function ProjectRail({ project }) {
   return (
@@ -8,6 +9,7 @@ export default function ProjectRail({ project }) {
       <div className="my-5 h-px bg-ob-line" />
       <div className="flex items-center gap-2 text-[12px] font-semibold text-ob-navy"><Hash className="size-4" /> general</div>
       <p className="mt-2 text-[11px] leading-5 text-ob-slate">Messages in this channel are saved to this project and shared with its owner.</p>
+      {project?.canManageGroup && <GroupInvites key={project.slug} slug={project.slug} />}
       {project?.repository?.url && <a href={project.repository.url} target="_blank" rel="noreferrer" className="mt-6 flex items-center gap-2 rounded-lg border border-ob-line p-3 text-[11px] font-semibold text-ob-navy hover:bg-ob-mist"><Github className="size-4 shrink-0" /><span className="min-w-0 flex-1 truncate">{project.repository.fullName}</span><ArrowUpRight className="size-3 shrink-0" /></a>}
     </aside>
   );

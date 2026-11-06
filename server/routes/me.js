@@ -4,7 +4,9 @@ const mongoose = require("mongoose");
 const { getAddress, verifyMessage } = require("ethers");
 const User = require("../models/User");
 const Project = require("../models/Project");
+const Group = require("../models/Group");
 const { requireFirebaseUser } = require("../middleware/requireFirebaseUser");
+const { getOrCreateUser } = require("../services/users");
 
 const router = express.Router();
 const BASE_CHAIN_ID = 8453;
@@ -15,18 +17,6 @@ function ensureDatabase(res) {
   if (mongoose.connection.readyState === 1) return true;
   res.status(503).json({ error: "The database is not connected." });
   return false;
-}
-
-async function getOrCreateUser(firebaseUser) {
-  return User.findOneAndUpdate(
-    { firebaseUid: firebaseUser.uid },
-    { $set: {
-      email: firebaseUser.email || "",
-      displayName: firebaseUser.name || "",
-      photoURL: firebaseUser.picture || "",
-    } },
-    { returnDocument: "after", upsert: true, setDefaultsOnInsert: true },
-  );
 }
 
 function userResponse(user) {
@@ -115,11 +105,26 @@ router.get("/projects", async (req, res) => {
   if (!ensureDatabase(res)) return;
   try {
     const user = await getOrCreateUser(req.firebaseUser);
-    const projects = await Project.find({ owner: user._id, status: { $ne: "archived" } }).sort({ updatedAt: -1 });
+    const [groups, pendingGroups] = await Promise.all([
+      Group.find({ $or: [{ owner: user._id }, { "members.user": user._id }] }).select("owner members"),
+      Group.find({ "joinRequests.user": user._id }).select("name"),
+    ]);
+    const groupsById = new Map(groups.map((group) => [group.id, group]));
+    const projects = await Project.find({
+      status: { $ne: "archived" },
+      $or: [{ owner: user._id }, { coOwners: user._id }, { group: { $in: groups.map((group) => group._id) } }],
+    }).sort({ updatedAt: -1 });
+    const roleFor = (project) => {
+      if (project.owner.equals(user._id)) return "Owner";
+      const group = groupsById.get(String(project.group));
+      const admin = group?.owner.equals(user._id) || group?.members.some((member) =>
+        member.user.equals(user._id) && ["owner", "admin"].includes(member.role));
+      return admin || project.coOwners.some((id) => id.equals(user._id)) ? "Maintainer" : "Contributor";
+    };
     res.json({ projects: projects.map((project) => ({
       id: project.id, slug: project.slug, name: project.name, description: project.description,
-      repository: project.githubRepository, role: "Owner", updatedAt: project.updatedAt,
-    })) });
+      repository: project.githubRepository, role: roleFor(project), updatedAt: project.updatedAt,
+    })), pendingJoinRequests: pendingGroups.map(({ id, name }) => ({ id, name })) });
   } catch (error) {
     console.error("Could not load projects:", error.message);
     res.status(500).json({ error: "Could not load your projects." });

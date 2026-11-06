@@ -55,12 +55,14 @@ function emitToProject(req, project, event, payload) {
 router.get("/:slug", async (req, res) => {
   if (!ensureDatabase(res)) return;
   try {
-    const project = await accessibleProject(req, res);
-    if (!project) return;
+    const { project, allowed, canManageGroup } = await findProjectAccess(req.params.slug, req.firebaseUser.uid);
+    if (!project) return res.status(404).json({ error: "Project not found." });
+    if (!allowed) return res.status(403).json({ error: "You do not have access to this project." });
     res.json({ project: {
       id: project.id, slug: project.slug, name: project.name,
       description: project.description, repository: project.githubRepository,
       owner: project.owner.displayName || project.owner.firebaseUid,
+      canManageGroup,
     } });
   } catch (error) {
     console.error("Could not load project:", error.message);

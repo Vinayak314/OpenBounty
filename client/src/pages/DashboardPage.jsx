@@ -29,11 +29,15 @@ export default function DashboardPage() {
   const [pickerLoading, setPickerLoading] = useState(false);
   const [pickerError, setPickerError] = useState("");
   const [pageError, setPageError] = useState("");
+  const [joinCode, setJoinCode] = useState("");
+  const [joining, setJoining] = useState(false);
+  const [joinFeedback, setJoinFeedback] = useState(null);
+  const [pendingRequests, setPendingRequests] = useState([]);
   const closePicker = useCallback(() => setPicker(false), []);
 
-  const loadProjects = useCallback(async () => {
-    try {
-      const result = await apiRequest("/me/projects");
+  const loadProjects = useCallback(() => apiRequest("/me/projects")
+    .then((result) => {
+      setPendingRequests(result.pendingJoinRequests ?? []);
       setProjects(result.projects.map((p) => ({
         id: p.id, slug: p.slug, name: p.name, repo: p.repository.fullName, description: p.description,
         role: p.role, icon: "sprout", openBounties: 0,
@@ -41,12 +45,17 @@ export default function DashboardPage() {
         memberCount: 1, members: [{ initials, tone: "orange" }], workspaceHref: `/project/${encodeURIComponent(p.slug)}`,
       })));
       setPageError("");
-    } catch (error) {
-      setPageError(error.message);
-    }
-  }, [initials]);
+    })
+    .catch((error) => setPageError(error.message)), [initials]);
 
   useEffect(() => { loadProjects(); }, [loadProjects]);
+
+  const hasPendingRequests = pendingRequests.length > 0;
+  useEffect(() => {
+    if (!hasPendingRequests) return;
+    const timer = setInterval(loadProjects, 10000);
+    return () => clearInterval(timer);
+  }, [hasPendingRequests, loadProjects]);
 
   useEffect(() => {
     if (!toast) return;
@@ -83,6 +92,25 @@ export default function DashboardPage() {
     }
   };
 
+  const requestToJoin = async (event) => {
+    event.preventDefault();
+    if (joining) return;
+    setJoining(true);
+    setJoinFeedback(null);
+    try {
+      const result = await apiRequest("/groups/join", { method: "POST", body: { code: joinCode } });
+      setJoinFeedback({ message: result.status === "member"
+        ? `You already have access to ${result.group}.`
+        : `Request sent to ${result.group}.` });
+      setJoinCode("");
+      await loadProjects();
+    } catch (error) {
+      setJoinFeedback({ error: true, message: error.message });
+    } finally {
+      setJoining(false);
+    }
+  };
+
   const rows = [];
   for (let i = 0; i < shown.length; i += 2) {
     rows.push(shown.slice(i, i + 2));
@@ -116,6 +144,27 @@ export default function DashboardPage() {
               <Github {...iconProps} size={18} />
               {dashboardGreeting.action.label}
             </button>
+          </section>
+
+          <section aria-labelledby="join-group" className="rounded-xl border border-ob-line p-4">
+            <h2 id="join-group" className="text-sm font-semibold">Join a group</h2>
+            <p className="mt-1 text-xs text-ob-slate">Enter the code shared by a maintainer. You’ll get access once your request is approved.</p>
+            <form onSubmit={requestToJoin} className="mt-3 flex flex-wrap items-end gap-2">
+              <label className="flex flex-col gap-1 text-xs font-medium">
+                Group code
+                <input value={joinCode} onChange={(event) => setJoinCode(event.target.value.toUpperCase().replace(/[^A-Z2-9]/g, "").slice(0, 6))}
+                  autoComplete="off" spellCheck={false} placeholder="ABC234"
+                  className="w-36 rounded-lg border border-ob-line px-3 py-2 font-mono text-sm tracking-widest" />
+              </label>
+              <button type="submit" disabled={joinCode.length !== 6 || joining}
+                className="rounded-lg bg-ob-navy px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
+                {joining ? "Sending…" : "Request to join"}
+              </button>
+            </form>
+            {joinFeedback && <p role={joinFeedback.error ? "alert" : "status"} className={`mt-2 text-xs ${joinFeedback.error ? "text-rose-700" : "text-ob-slate"}`}>{joinFeedback.message}</p>}
+            {hasPendingRequests && <ul aria-label="Pending group requests" className="mt-3 space-y-1 text-xs text-ob-slate">
+              {pendingRequests.map((group) => <li key={group.id}>{group.name} · Pending approval</li>)}
+            </ul>}
           </section>
 
           <section className="flex gap-4 py-2" aria-label="Summary">
@@ -163,7 +212,7 @@ export default function DashboardPage() {
 
           <section className="flex flex-col gap-4" aria-label="Projects">
             {pageError && <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">{pageError}</p>}
-            {!pageError && projects.length === 0 && <p className="rounded-xl border border-dashed border-[#d1d5db] px-5 py-8 text-center text-sm text-ob-slate">Add one of your GitHub repositories to start a project.</p>}
+            {!pageError && projects.length === 0 && <p className="rounded-xl border border-dashed border-[#d1d5db] px-5 py-8 text-center text-sm text-ob-slate">Add a GitHub repository to start a project or request to join a group.</p>}
             {rows.map((row, rowIndex) => {
               const isLast = rowIndex === rows.length - 1;
               return (

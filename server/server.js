@@ -6,6 +6,7 @@ const mongoose = require("mongoose");
 const { Server: SocketIOServer } = require("socket.io");
 const meRouter = require("./routes/me");
 const projectsRouter = require("./routes/projects");
+const groupsRouter = require("./routes/groups");
 const { getFirebaseAuth } = require("./config/firebaseAdmin");
 const { findProjectAccess } = require("./services/projectAccess");
 
@@ -74,6 +75,7 @@ app.use((req, res, next) => {
 app.get("/", (_req, res) => res.send("OpenBounty API"));
 app.use("/api/me", meRouter);
 app.use("/api/projects", projectsRouter);
+app.use("/api/groups", groupsRouter);
 
 async function start() {
   if (!process.env.MONGODB_URI) {
