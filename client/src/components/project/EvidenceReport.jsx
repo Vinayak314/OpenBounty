@@ -83,9 +83,27 @@ export default function EvidenceReport({ report }) {
       <p className="mt-4 flex items-center gap-2 text-[11px] font-semibold text-ob-navy">
         <ShieldCheck className="size-4" strokeWidth={1.8} /> {report.policy}
       </p>
+      {report.linkedIssues?.length > 0 && (
+        <p className="mt-2 text-[11px] text-ob-slate">
+          Linked issues read as background:{" "}
+          {report.linkedIssues.map((issue, i) => (
+            <span key={issue.number}>{i > 0 && ", "}<a href={issue.url} target="_blank" rel="noopener noreferrer" className="text-sky-700 underline">#{issue.number}</a> {issue.title}</span>
+          ))}
+        </p>
+      )}
       <p className="mt-[14px] break-all text-[10px] text-ob-slate">
-        {[report.requestId, report.model, report.reportHash && `report ${report.reportHash}`].filter(Boolean).join(" · ")}
+        {[report.requestId, report.model, report.reportHash && `report ${report.reportHash.slice(0, 12)}`].filter(Boolean).join(" · ")}
       </p>
+      {report.trace && (
+        <p className="mt-1 break-all text-[10px] text-ob-slate" title="Reported by the 0G router. Traceability only, not proof that the assessment is correct.">
+          {[
+            report.trace.provider && `provider ${report.trace.provider}`,
+            `E2EE ${report.trace.e2ee || "not reported"}`,
+            report.trace.trustMode ? `trust mode ${report.trace.trustMode}` : "no TEE trust mode requested",
+            report.trace.tokens > 0 && `${report.trace.tokens} tokens`,
+          ].filter(Boolean).join(" · ")}
+        </p>
+      )}
     </div>
   );
 }

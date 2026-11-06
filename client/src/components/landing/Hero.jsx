@@ -4,6 +4,7 @@ import sparkle from "@/assets/landing/sparkle.svg";
 import ConnectGithubButton from "./ConnectGithubButton";
 import GardenIllustration from "./GardenIllustration";
 import { HERO } from "@/data/landing";
+import { Link } from "react-router-dom";
 
 const SHADOW = { textShadow: "0 4px 10px rgba(7,27,62,0.1)" };
 const HEADLINE =
@@ -47,6 +48,7 @@ export default function Hero() {
         </h1>
         <p className="text-center text-[17px] text-ob-navy">{HERO.subtitle}</p>
         <ConnectGithubButton label={HERO.connectLabel} large />
+        <Link to="/demo/0g" className="text-sm font-semibold text-ob-navy underline underline-offset-4">Try the 0G review demo</Link>
         <p
           className="text-[11px] text-[#6b7280]"
           style={{ textShadow: "0 2px 6px rgba(7,27,62,0.08)" }}

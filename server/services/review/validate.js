@@ -1,5 +1,3 @@
-const { parsePatch } = require("./diff");
-
 const STATUSES = ["supported", "missing", "needs_verification"];
 const clip = (value, max) => String(value ?? "").replace(/\s+/g, " ").trim().slice(0, max);
 
@@ -28,8 +26,15 @@ function extractJson(text) {
 // Validates model output against the approved criteria and the real PR patches.
 // Never trusts the model: unknown criteria are ignored, missing ones become "needs_verification",
 // and "supported" without at least one citation that exists in the diff is downgraded.
-function validateReport(raw, { criteria, files }) {
-  const patchLines = new Map(files.filter((f) => f.patch).map((f) => [f.path, parsePatch(f.patch)]));
+function validateReport(raw, { criteria, shownDiff }) {
+  const patchLines = new Map(shownDiff.map((file) => [
+    file.path,
+    new Set([...file.text.matchAll(/^L(\d+)[+ ] /gm)].map((match) => Number(match[1]))),
+  ]));
+  const addedLines = new Map(shownDiff.map((file) => [
+    file.path,
+    new Set([...file.text.matchAll(/^L(\d+)\+ /gm)].map((match) => Number(match[1]))),
+  ]));
   if (!raw || typeof raw !== "object" || !Array.isArray(raw.criteria)) return { ok: false, error: "malformed_output" };
 
   let droppedCitations = 0;
@@ -39,14 +44,20 @@ function validateReport(raw, { criteria, files }) {
     if (!criteria.some((c) => c.id === id) || byId.has(id)) continue;
 
     const citations = [];
+    let changedCitations = 0;
     for (const cite of Array.isArray(item.citations) ? item.citations.slice(0, 8) : []) {
       const path = clip(cite?.path, 300);
-      const start = Number.parseInt(cite?.startLine, 10);
-      const end = Number.parseInt(cite?.endLine ?? cite?.startLine, 10);
+      const start = cite?.startLine;
+      const end = cite?.endLine ?? start;
       const lines = patchLines.get(path);
       const valid = lines && Number.isInteger(start) && Number.isInteger(end) && start >= 1 && end >= start
-        && end - start <= 200 && lines.has(start) && lines.has(end);
-      if (valid) citations.push({ path, startLine: start, endLine: end });
+        && end - start <= 200 && Array.from({ length: end - start + 1 }, (_, offset) => lines.has(start + offset)).every(Boolean);
+      if (valid) {
+        const added = addedLines.get(path);
+        const touchesChange = Array.from({ length: end - start + 1 }, (_, offset) => added?.has(start + offset)).some(Boolean);
+        citations.push({ path, startLine: start, endLine: end });
+        if (touchesChange) changedCitations += 1;
+      }
       else droppedCitations += 1;
     }
 
@@ -55,6 +66,10 @@ function validateReport(raw, { criteria, files }) {
     if (status === "supported" && citations.length === 0) {
       status = "needs_verification";
       explanation = `${explanation} (Downgraded: no citation could be verified against the diff.)`.trim();
+    } else if (status === "supported" && changedCitations === 0) {
+      // Unchanged context lines show existing code, not what this PR delivered.
+      status = "needs_verification";
+      explanation = `${explanation} (Downgraded: the cited lines are unchanged context, not code this PR adds or edits.)`.trim();
     }
     byId.set(id, { id, status, explanation, citations });
   }

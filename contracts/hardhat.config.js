@@ -69,5 +69,6 @@ module.exports = {
       },
     ],
   },
-  sourcify: { enabled: true },
+  // Sourcify v1 (used by hardhat-verify 2) was removed upstream; set SOURCIFY=false to verify on Blockscout only.
+  sourcify: { enabled: process.env.SOURCIFY !== "false" },
 };

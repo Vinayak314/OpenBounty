@@ -5,11 +5,16 @@ import { iconProps } from "@/components/layout/icon";
 /** Choose one of the signed-in user's GitHub repositories to add as a project. */
 export default function RepoPickerModal({ open, repos, addedIds, onPick, onClose, loading = false, error = "" }) {
   const [q, setQ] = useState("");
+  const [wasOpen, setWasOpen] = useState(open);
   const input = useRef(null);
+  // Clear the search each time the dialog opens (adjusting state during render, not in an effect).
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) setQ("");
+  }
 
   useEffect(() => {
     if (!open) return;
-    setQ("");
     input.current?.focus();
     const onKey = (e) => e.key === "Escape" && onClose();
     document.addEventListener("keydown", onKey);

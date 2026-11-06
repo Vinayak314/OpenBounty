@@ -92,23 +92,30 @@ After each review the agent posts a chat message:
 
 ## 2. In the GitHub UI
 
-**Nothing is posted to GitHub yet.** The agent reads GitHub; it cannot write to it. Today the report exists only in OpenBounty chat. Planned behaviour, which needs the GitHub App (write permission + webhooks) ⏳:
+Uses a repository webhook plus a repo-scoped token (`GITHUB_REVIEW_TOKEN`, allowlisted by `GITHUB_REVIEW_REPOSITORIES`). A GitHub App is still planned.
 
 | Feature | Status |
 |---|---|
-| Post the evidence report as a PR comment | ⏳ |
-| Keep ONE comment per PR and update it on each new commit | ⏳ |
-| Mark the old comment stale when the head SHA changes | ⏳ |
-| Start a review automatically on PR open/push (webhooks, debounced) | ⏳ |
-| Re-run review when CI finishes | ⏳ |
-| Show 0G request ID and reviewed SHA in the comment | ⏳ |
+| Post the evidence report as a PR comment | 🧪 |
+| Keep ONE comment per PR and update it on each new commit | 🧪 |
+| Mark the old comment stale when the head SHA changes (new report or failure notice) | 🧪 |
+| Start a review automatically on PR open/push (webhooks, debounced, delivery-ID dedupe) | 🧪 |
+| Refresh CI on the report when a check suite/status finishes (no new inference) | 🧪 |
+| Show 0G request ID, provider/E2EE and reviewed SHA in the comment | 🧪 |
 | Set a commit status / check run from the recommendation | ⏳ |
-| Read issue text and linked issues as review context | ⏳ |
+| Read issue text and linked issues as review context | 🧪 |
 | Private repositories | ⏳ |
 
 What it already reads from GitHub (public, read-only, optional `GITHUB_TOKEN` for a higher rate limit): repo metadata, default-branch commit and file tree, raw file contents, PR metadata, PR changed files with patches, check runs and commit statuses.
 
 ---
+
+## 2b. Added on track1 🧪
+- **Criteria editor** (Criteria tab): draft with 0G from a task or issue number, edit, approve as a new version (owner/co-owner, optimistic version check). Drafts and approvals are posted to chat.
+- **Review jobs**: queued/running/failed state per PR stored in MongoDB; PR reviews tab shows failures with a Retry button and can request a review by PR number.
+- **0G activity** tab: every inference run with request ID, role, model, provider, E2EE header and tokens.
+- **Context**: questions mentioning `#N` include the stored evidence report for PR N, or the GitHub issue text. Approved criteria are always in context.
+- Offline tests: `cd server && npm test`.
 
 ## 3. Not built yet / limits
 

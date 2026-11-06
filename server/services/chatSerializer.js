@@ -12,10 +12,19 @@ const ASSESSMENT = {
 };
 
 // Maps a Review document to the shape EvidenceReport renders.
-function reportView(review) {
-  const stale = review.status === "stale";
+function reportView(review, currentCriteria) {
+  const stale = review.status === "stale" || Boolean(currentCriteria && (
+    review.criteriaHash !== currentCriteria.hash || review.criteriaVersion !== currentCriteria.version));
   return {
     title: "Evidence report",
+    id: review.id,
+    prNumber: review.prNumber,
+    headSha: review.headSha,
+    prState: review.prState,
+    criteriaVersion: review.criteriaVersion,
+    approval: !stale && review.approval?.at ? { name: review.approval.byName, at: review.approval.at } : null,
+    githubCommentUrl: review.githubCommentUrl,
+    githubPublication: review.githubPublication,
     status: stale ? "Stale" : VERDICT_LABEL[review.verdict],
     verdict: review.verdict,
     stale,
@@ -36,11 +45,21 @@ function reportView(review) {
     risks: review.risks,
     uncertainty: review.uncertainty,
     ci: { state: review.ci?.state || "none", runs: (review.ci?.runs || []).slice(0, 8).map((r) => ({ name: r.name, conclusion: r.conclusion || r.status, url: r.url })) },
-    next: stale ? "A newer commit was pushed. This report no longer reflects the PR; run /review again." : review.verdictReasons.join(" "),
+    next: stale ? "The commit, criteria or report changed. Run a fresh review before approval." : review.verdictReasons.join(" "),
     policy: "AI advises, maintainer approves",
     requestId: review.requestId ? `0G request ID: ${review.requestId}` : "",
+    rawRequestId: review.requestId || "",
     model: review.model,
-    reportHash: review.reportHash ? review.reportHash.slice(0, 12) : "",
+    // What the 0G router reported about the run. Traceability, not proof that the assessment is correct.
+    trace: review.requestId ? {
+      provider: review.aiTrace?.provider || "",
+      e2ee: review.aiTrace?.e2ee || "",
+      trustMode: review.aiTrace?.trustMode || "",
+      tokens: (review.aiTrace?.promptTokens || 0) + (review.aiTrace?.completionTokens || 0),
+    } : null,
+    linkedIssues: (review.linkedIssues || []).map((issue) => ({ number: issue.number, title: issue.title, url: issue.url })),
+    reviewedAt: review.createdAt || null,
+    reportHash: review.reportHash || "",
   };
 }
 
@@ -73,6 +92,8 @@ function messageResponse(message, firebaseUid) {
       contextHash: message.agent.contextHash || "",
       repoSha: message.agent.repoSha || "",
       repoFiles: message.agent.repoFiles || [],
+      provider: message.agent.provider || "",
+      e2ee: message.agent.e2ee || "",
     } : null,
     reactions: Object.fromEntries((message.reactions || []).map((reaction) => [reaction.emoji, {
       count: reaction.users.length,
@@ -81,4 +102,4 @@ function messageResponse(message, firebaseUid) {
   };
 }
 
-module.exports = { AGENT_UID, messageResponse };
+module.exports = { AGENT_UID, messageResponse, reportView };

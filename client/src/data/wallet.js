@@ -4,7 +4,7 @@
 export const WALLET_SESSION = {
   steps: [
     { id: "github", label: "GitHub connected", status: "complete" },
-    { id: "wallet", index: "02", label: "Connect wallet", status: "current" },
+    { id: "wallet", index: "02", label: "Payment account", status: "current" },
     { id: "dashboard", index: "03", label: "Your dashboard", status: "upcoming" },
   ],
   account: {
@@ -17,12 +17,12 @@ export const WALLET_SESSION = {
     headline: "A home for your",
     headlineMuted: "hard-earned rewards.",
     description:
-      "Connect your wallet to receive USDC payouts for approved open-source contributions.",
+      "Create a passkey payment account to fund bounties or receive USDT rewards. No seed phrase, no wallet app, no gas token.",
   },
   trustNote:
-    "You stay in control. We’ll never ask for your seed phrase or move funds without your approval. Connecting is free.",
+    "Your passkey stays on your device. Every payment needs your fingerprint, face or device PIN, and OpenBounty pays the network fees. We can never move funds without your approval.",
   nextStep: { label: "Next up: your project dashboard →", href: "/dashboard" },
-  network: "USDC on Base · No transaction is made during setup.",
+  network: "USDT on Whitechain Sepolia (test network) · Network fees are sponsored by OpenBounty.",
   helpLink: { label: "Need a hand? Visit our help center ↗", href: "#" },
   footer: "A little clarity. A lot of possibility.  ·  OpenBounty",
 };

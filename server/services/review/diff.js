@@ -41,21 +41,40 @@ function buildDiffBudget(files, maxChars) {
     const rank = (f) => (/\.(md|mdx|txt)$/i.test(f.path) ? 2 : isTestPath(f.path) ? 1 : 0);
     return rank(a) - rank(b) || (b.additions + b.deletions) - (a.additions + a.deletions);
   });
-  let budget = maxChars;
   const included = [];
   const omitted = [];
-  for (const file of ranked) {
-    if (!file.patch) { omitted.push({ path: file.path, reason: "no textual diff (binary, generated or too large)" }); continue; }
-    const numbered = numberPatch(file.patch);
-    if (numbered.length > budget) {
-      if (budget > 1500) {
-        included.push({ path: file.path, text: numbered.slice(0, budget), partial: true });
-        budget = 0;
-      } else omitted.push({ path: file.path, reason: "diff budget exhausted" });
-      continue;
+  // Tests are evidence for criteria like "tests cover X", so they keep a reserved share instead of being squeezed
+  // out by a large source change. Whatever source files do not use flows on to the tests.
+  const withDiff = ranked.filter((file) => file.patch);
+  const tests = withDiff.filter((file) => isTestPath(file.path));
+  const hasBoth = tests.length > 0 && tests.length < withDiff.length;
+  function fit(list, startBudget) {
+    let budget = startBudget;
+    for (const file of list) {
+      const numbered = numberPatch(file.patch);
+      if (numbered.length > budget) {
+        if (budget > 1500) {
+          const boundary = numbered.lastIndexOf("\n", budget);
+          if (boundary > 0) included.push({ path: file.path, text: numbered.slice(0, boundary), partial: true });
+          else omitted.push({ path: file.path, reason: "no full diff line fits the budget" });
+          budget = 0;
+        } else omitted.push({ path: file.path, reason: "diff budget exhausted" });
+        continue;
+      }
+      budget -= numbered.length;
+      included.push({ path: file.path, text: numbered, partial: false });
     }
-    budget -= numbered.length;
-    included.push({ path: file.path, text: numbered, partial: false });
+    return budget;
+  }
+  for (const file of ranked) {
+    if (!file.patch) omitted.push({ path: file.path, reason: "no textual diff (binary, generated or too large)" });
+  }
+  if (hasBoth) {
+    const reserve = Math.floor(maxChars * 0.25);
+    const left = fit(withDiff.filter((file) => !isTestPath(file.path)), maxChars - reserve);
+    fit(tests, reserve + left);
+  } else {
+    fit(withDiff, maxChars);
   }
   return { included, omitted, truncated: omitted.length > 0 || included.some((f) => f.partial) };
 }

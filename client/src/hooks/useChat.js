@@ -8,11 +8,12 @@ const API_URL = import.meta.env.VITE_API_URL || undefined;
 const safe = (fn, fallback) => { try { return fn(); } catch { return fallback; } };
 
 // Slash commands handled by the central AI agent (see server/services/ai/triggers.js).
+// Mirrors server/services/ai/triggers.js. `usage` and `example` feed the command manual in the project rail.
 export const COMMANDS = [
-  { cmd: "/explain", hint: "Ask the agent to explain code, an issue or the project" },
-  { cmd: "/criteria", hint: "Ask the agent to draft acceptance criteria" },
-  { cmd: "/review", hint: "Review a pull request: /review 12" },
-  { cmd: "/setcriteria", hint: "Maintainers: approve criteria, one per line" },
+  { cmd: "/explain", description: "Explains code, an issue or how the project works, citing files in the repository.", hint: "Ask the agent to explain code, an issue or the project", usage: "/explain <question>", short: "Explain code", example: "/explain how does hello.py work?" },
+  { cmd: "/criteria", description: "Drafts acceptance criteria for a task. A maintainer still has to approve them.", hint: "Ask the agent to draft acceptance criteria", usage: "/criteria <task>", short: "Draft criteria", example: "/criteria issue #1: print Hello, World!" },
+  { cmd: "/review", description: "Reviews a pull request against the approved criteria and CI, and posts an evidence report.", hint: "Review a pull request: /review 12", usage: "/review <PR> [force]", short: "Review a PR", example: "/review 2", note: "Add force to re-run a review on the same commit." },
+  { cmd: "/setcriteria", description: "Approves the criteria used for reviews. Write one criterion per line.", hint: "Maintainers: approve criteria, one per line", usage: "/setcriteria <lines>", short: "Approve (maintainers)", example: "/setcriteria\ngreet() returns \"Hello, World!\"\npython -m unittest passes", maintainer: true },
 ];
 
 function upsertMessage(current, message) {

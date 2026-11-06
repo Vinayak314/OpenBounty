@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowUp, CornerUpLeft, FileText, Paperclip, Pencil, Smile, X } from "lucide-react";
-import { CHANNEL } from "@/data/project";
 import { COMMANDS } from "@/hooks/useChat";
 
 const EMOJIS = ["😀", "😂", "🙂", "😍", "🤔", "😅", "🙌", "👏", "👍", "👎", "🎉", "🔥", "✅", "❌", "👀", "🚀", "💡", "🐛", "❤️", "🙏", "💸", "📎", "⚠️", "✨"];
@@ -126,6 +125,20 @@ export default function Composer({ onSend, onTyping, replyTo, onCancelReply, edi
     const pos = area.current?.selectionStart ?? text.length;
     setTextAt(text.slice(0, pos) + snippet + text.slice(pos), pos + snippet.length);
   };
+
+  // The command manual in the project rail sends "ob:compose". Commands must start the message, so the command goes
+  // first and any existing draft (minus a command it already starts with) follows it.
+  const composeRef = useRef(null);
+  composeRef.current = (command) => {
+    if (editing) return;
+    const rest = text.replace(/^\/\w+\s*/, "");
+    setTextAt(command + rest, command.length);
+  };
+  useEffect(() => {
+    const onCompose = (event) => composeRef.current?.(String(event.detail?.text || ""));
+    window.addEventListener("ob:compose", onCompose);
+    return () => window.removeEventListener("ob:compose", onCompose);
+  }, []);
 
   const addFiles = async (list) => {
     const remaining = Math.max(0, 5 - files.length);
@@ -263,7 +276,7 @@ export default function Composer({ onSend, onTyping, replyTo, onCancelReply, edi
                 addFiles(imgs);
               }
             }}
-            placeholder={`Message #general in ${projectName || CHANNEL.project}…`}
+            placeholder={`Message ${projectName || "this project"}, or type / for agent commands…`}
             className="block max-h-40 w-full resize-none bg-transparent text-[12px] leading-5 text-ob-navy outline-none placeholder:text-ob-slate"
           />
           <div className="mt-3 flex items-center justify-between">

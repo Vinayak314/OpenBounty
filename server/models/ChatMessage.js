@@ -25,7 +25,7 @@ const ChatMessageSchema = new mongoose.Schema({
   review: { type: mongoose.Schema.Types.ObjectId, ref: "Review", default: undefined },
   // Set only on messages produced by the central AI agent (or its deterministic failure notices).
   agent: {
-    role: { type: String, enum: ["guide", "scope", "reviewer"] },
+    role: { type: String, enum: ["guide", "scope", "reviewer", "payments"] },
     status: { type: String, enum: ["ok", "error"] },
     requestId: { type: String, default: "", maxlength: 200 },
     model: { type: String, default: "", maxlength: 200 },
@@ -34,9 +34,14 @@ const ChatMessageSchema = new mongoose.Schema({
     repoFiles: [{ type: String, maxlength: 300 }],
     triggerMessage: { type: String, default: "", maxlength: 40 },
     errorCode: { type: String, default: "", maxlength: 40 },
+    provider: { type: String, default: "", maxlength: 200 },
+    e2ee: { type: String, default: "", maxlength: 40 },
+    promptTokens: { type: Number, default: 0 },
+    completionTokens: { type: Number, default: 0 },
   },
 }, { timestamps: true });
 
 ChatMessageSchema.index({ project: 1, createdAt: 1 });
+ChatMessageSchema.index({ project: 1, authorUid: 1, _id: -1 });
 
 module.exports = mongoose.models.ChatMessage || mongoose.model("ChatMessage", ChatMessageSchema);

@@ -4,6 +4,7 @@ import { Bell } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { appNetwork, notifications } from "@/data/dashboard";
 import { useAuth } from "@/auth/AuthContext";
+import WalletBalanceChip from "@/components/wallet/WalletBalanceChip";
 import InitialsAvatar from "./InitialsAvatar";
 import { iconProps } from "./icon";
 
@@ -70,6 +71,7 @@ export default function AppHeader({ crumbs, variant = "default" }) {
         ))}
       </p>
       <div className={cn("flex items-center", v.utilities)}>
+        <WalletBalanceChip />
         {variant === "compact" ? (
           <span className="text-[11px] font-medium leading-[normal] text-ob-slate">
             {appNetwork.label}

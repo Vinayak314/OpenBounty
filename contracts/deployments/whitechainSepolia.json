@@ -1,0 +1,29 @@
+{
+  "network": "whitechainSepolia",
+  "chainId": 1874,
+  "escrow": "0x2DC1E6ecFaB39DB8212439570aBF25a803f37d83",
+  "token": "0xcedfB56113143d55b2358b8CFbB0dEB5Ad2f55a7",
+  "tokenIsMock": false,
+  "owner": "0x73a17e7eB93f08C8bE4DE764fC3b0d0f4DAEEB48",
+  "attestationSigner": "0xbb3E1E83daB7b63dd431D0E5ccB682cE859060B0",
+  "deployer": "0x9d5A3bDe78d9990b6DD055CaBcc3aDf32cba9B47",
+  "txHash": "0x55754f9a53e4684abacc2ab3a5e5e045db5a153c2ea211b9fb06cc3d625df2a8",
+  "blockNumber": 12390394,
+  "deployedAt": "2026-11-06T17:39:26.143Z",
+  "compiler": {
+    "solc": "0.8.28",
+    "optimizer": {
+      "enabled": true,
+      "runs": 200
+    },
+    "viaIR": true,
+    "evmVersion": "cancun"
+  },
+  "constructorArgs": [
+    "0x73a17e7eB93f08C8bE4DE764fC3b0d0f4DAEEB48",
+    "0xbb3E1E83daB7b63dd431D0E5ccB682cE859060B0",
+    [
+      "0xcedfB56113143d55b2358b8CFbB0dEB5Ad2f55a7"
+    ]
+  ]
+}

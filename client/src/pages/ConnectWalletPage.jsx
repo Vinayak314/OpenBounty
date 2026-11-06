@@ -7,27 +7,7 @@ import ConnectWalletCard from "@/components/wallet/ConnectWalletCard";
 import { WALLET_SESSION } from "@/data/wallet";
 import { useAuth } from "@/auth/AuthContext";
 import { apiRequest } from "@/lib/api";
-
-const BASE_CHAIN_ID = 8453;
-const BASE_CHAIN_HEX = "0x2105";
-
-async function switchToBase(ethereum) {
-  try {
-    await ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId: BASE_CHAIN_HEX }] });
-  } catch (error) {
-    if (error.code !== 4902) throw error;
-    await ethereum.request({
-      method: "wallet_addEthereumChain",
-      params: [{
-        chainId: BASE_CHAIN_HEX,
-        chainName: "Base",
-        nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
-        rpcUrls: ["https://mainnet.base.org"],
-        blockExplorerUrls: ["https://basescan.org"],
-      }],
-    });
-  }
-}
+import { createPaymentAccount, passkeysSupported } from "@/lib/passkey";
 
 export default function ConnectWalletPage() {
   const navigate = useNavigate();
@@ -39,10 +19,16 @@ export default function ConnectWalletPage() {
   const [walletBusy, setWalletBusy] = useState(false);
   const [walletError, setWalletError] = useState("");
 
+  const [config, setConfig] = useState(null);
+
   useEffect(() => {
     let active = true;
-    apiRequest("/me")
-      .then(({ user }) => { if (active) setWallet(user.wallet); })
+    apiRequest("/wallet")
+      .then((result) => {
+        if (!active) return;
+        setConfig(result.config);
+        setWallet(result.account);
+      })
       .catch((error) => { if (active) setWalletError(error.message); })
       .finally(() => { if (active) setWalletLoading(false); });
     return () => { active = false; };
@@ -52,45 +38,25 @@ export default function ConnectWalletPage() {
     setWalletError("");
     setWalletBusy(true);
     try {
-      const ethereum = window.ethereum;
-      if (!ethereum) throw new Error("MetaMask was not found. Install the MetaMask browser extension, then try again.");
-      if (!ethereum.isMetaMask) throw new Error("Use MetaMask to connect your payout wallet.");
-
-      const accounts = await ethereum.request({ method: "eth_requestAccounts" });
-      const address = accounts?.[0];
-      if (!address) throw new Error("MetaMask did not return an account.");
-
-      await switchToBase(ethereum);
-      const chainId = Number.parseInt(await ethereum.request({ method: "eth_chainId" }), 16);
-      if (chainId !== BASE_CHAIN_ID) throw new Error("Switch MetaMask to the Base network to continue.");
-
-      const { message } = await apiRequest("/me/wallet/challenge", {
-        method: "POST",
-        body: { address, chainId },
-      });
-      const signature = await ethereum.request({
-        method: "personal_sign",
-        params: [message, address],
-      });
-      const result = await apiRequest("/me/wallet/verify", {
-        method: "POST",
-        body: { address, chainId, signature },
-      });
-      setWallet(result.wallet);
+      if (!config?.accountsEnabled) throw new Error("Payment accounts are not configured on this server yet.");
+      if (!passkeysSupported()) throw new Error("This browser does not support passkeys. Use a current Chrome, Safari, Edge or Firefox.");
+      const result = await createPaymentAccount();
+      setWallet(result.account);
       navigate("/dashboard", { replace: true });
     } catch (error) {
-      if (error.code === 4001) setWalletError("Connection was cancelled in MetaMask.");
-      else setWalletError(error.message || "Could not connect MetaMask. Please try again.");
+      setWalletError(error.message || "Could not create your payment account. Please try again.");
     } finally {
       setWalletBusy(false);
     }
   }
 
   async function disconnectWallet() {
+    const ok = window.confirm("Remove this payment account from OpenBounty? A passkey account cannot be recovered or re-linked, and anything it holds stays inaccessible. Accounts with a balance or escrow permissions cannot be removed.");
+    if (!ok) return;
     setWalletError("");
     setWalletBusy(true);
     try {
-      await apiRequest("/me/wallet", { method: "DELETE" });
+      await apiRequest("/me/wallet", { method: "DELETE", body: { confirm: true } });
       setWallet(null);
     } catch (error) {
       setWalletError(error.message);
@@ -124,6 +90,7 @@ export default function ConnectWalletPage() {
             walletError={walletError}
             onConnectWallet={connectWallet}
             onDisconnectWallet={disconnectWallet}
+            config={config}
             trustNote={s.trustNote}
             nextStep={s.nextStep}
           />

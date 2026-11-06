@@ -3,6 +3,8 @@ const mongoose = require("mongoose");
 // One AI evidence report for a PR head commit against one version of the approved criteria.
 const ReviewSchema = new mongoose.Schema({
   project: { type: mongoose.Schema.Types.ObjectId, ref: "Project", required: true, index: true },
+  // Set when the PR is a bounty submission: reviewed against that bounty's funded criteria.
+  bounty: { type: mongoose.Schema.Types.ObjectId, ref: "Bounty", default: null, index: true },
   prNumber: { type: Number, required: true },
   prUrl: { type: String, default: "" },
   prTitle: { type: String, default: "", maxlength: 300 },
@@ -32,8 +34,25 @@ const ReviewSchema = new mongoose.Schema({
   droppedCitations: { type: Number, default: 0 },
   requestId: { type: String, default: "" },
   model: { type: String, default: "" },
+  aiTrace: {
+    provider: { type: String, default: "" },
+    e2ee: { type: String, default: "" },
+    trustMode: { type: String, default: "" },
+    promptTokens: { type: Number, default: 0 },
+    completionTokens: { type: Number, default: 0 },
+  },
+  linkedIssues: [{ number: Number, title: { type: String, maxlength: 300 }, url: String }],
   reportHash: { type: String, default: "" },
   requestedByUid: { type: String, default: "" },
+  githubCommentId: Number,
+  githubCommentUrl: String,
+  githubContentHash: String,
+  githubPublication: { type: String, enum: ["published", "failed", "disabled"] },
+  approval: {
+    byUid: String,
+    byName: String,
+    at: Date,
+  },
 }, { timestamps: true });
 
 ReviewSchema.index({ project: 1, prNumber: 1, headSha: 1, criteriaHash: 1 });
