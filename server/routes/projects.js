@@ -1,8 +1,8 @@
 const express = require("express");
 const mongoose = require("mongoose");
-const Project = require("../models/Project");
 const ChatMessage = require("../models/ChatMessage");
 const { requireFirebaseUser } = require("../middleware/requireFirebaseUser");
+const { findProjectAccess } = require("../services/projectAccess");
 
 const router = express.Router();
 router.use(requireFirebaseUser);
@@ -13,13 +13,13 @@ function ensureDatabase(res) {
   return false;
 }
 
-async function ownedProject(req, res) {
-  const project = await Project.findOne({ slug: req.params.slug }).populate("owner", "firebaseUid displayName photoURL");
+async function accessibleProject(req, res) {
+  const { project, allowed } = await findProjectAccess(req.params.slug, req.firebaseUser.uid);
   if (!project) {
     res.status(404).json({ error: "Project not found." });
     return null;
   }
-  if (project.owner.firebaseUid !== req.firebaseUser.uid) {
+  if (!allowed) {
     res.status(403).json({ error: "You do not have access to this project." });
     return null;
   }
@@ -31,6 +31,7 @@ function messageResponse(message, firebaseUid) {
   const initials = authorName.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "GH";
   return {
     id: message.id,
+    authorUid: message.authorUid,
     type: "message",
     author: { name: authorName, initials, color: "orange", photoURL: message.authorPhoto },
     me: message.authorUid === firebaseUid,
@@ -40,13 +41,21 @@ function messageResponse(message, firebaseUid) {
     attachments: message.attachments,
     replyTo: message.replyTo?.id ? message.replyTo : null,
     edited: message.edited,
+    reactions: Object.fromEntries((message.reactions || []).map((reaction) => [reaction.emoji, {
+      count: reaction.users.length,
+      mine: firebaseUid ? reaction.users.includes(firebaseUid) : false,
+    }])),
   };
+}
+
+function emitToProject(req, project, event, payload) {
+  req.app.get("io")?.to(`project:${project.id}`).emit(event, payload);
 }
 
 router.get("/:slug", async (req, res) => {
   if (!ensureDatabase(res)) return;
   try {
-    const project = await ownedProject(req, res);
+    const project = await accessibleProject(req, res);
     if (!project) return;
     res.json({ project: {
       id: project.id, slug: project.slug, name: project.name,
@@ -62,7 +71,7 @@ router.get("/:slug", async (req, res) => {
 router.get("/:slug/messages", async (req, res) => {
   if (!ensureDatabase(res)) return;
   try {
-    const project = await ownedProject(req, res);
+    const project = await accessibleProject(req, res);
     if (!project) return;
     const messages = await ChatMessage.find({ project: project._id }).sort({ createdAt: 1 }).limit(500);
     res.json({ messages: messages.map((message) => messageResponse(message, req.firebaseUser.uid)) });
@@ -85,7 +94,7 @@ router.post("/:slug/messages", async (req, res) => {
   }));
   if (attachments.some((attachment) => !attachment.name)) return res.status(400).json({ error: "Each attachment needs a file name." });
   try {
-    const project = await ownedProject(req, res);
+    const project = await accessibleProject(req, res);
     if (!project) return;
     const message = await ChatMessage.create({
       project: project._id,
@@ -100,6 +109,7 @@ router.post("/:slug/messages", async (req, res) => {
         snippet: String(req.body.replyTo.snippet || "").slice(0, 120),
       } : undefined,
     });
+    emitToProject(req, project, "chat:message-created", messageResponse(message));
     res.status(201).json({ message: messageResponse(message, req.firebaseUser.uid) });
   } catch (error) {
     console.error("Could not send project message:", error.message);
@@ -112,13 +122,14 @@ router.put("/:slug/messages/:messageId", async (req, res) => {
   const body = typeof req.body?.body === "string" ? req.body.body.trim() : "";
   if (!body || body.length > 10000) return res.status(400).json({ error: "Write a message up to 10,000 characters." });
   try {
-    const project = await ownedProject(req, res);
+    const project = await accessibleProject(req, res);
     if (!project) return;
     const message = await ChatMessage.findOneAndUpdate(
       { _id: req.params.messageId, project: project._id, authorUid: req.firebaseUser.uid },
-      { $set: { body, edited: true } }, { new: true, runValidators: true },
+      { $set: { body, edited: true } }, { returnDocument: "after", runValidators: true },
     );
     if (!message) return res.status(404).json({ error: "Message not found or you cannot edit it." });
+    emitToProject(req, project, "chat:message-updated", messageResponse(message));
     res.json({ message: messageResponse(message, req.firebaseUser.uid) });
   } catch (error) {
     console.error("Could not edit project message:", error.message);
@@ -129,16 +140,50 @@ router.put("/:slug/messages/:messageId", async (req, res) => {
 router.delete("/:slug/messages/:messageId", async (req, res) => {
   if (!ensureDatabase(res)) return;
   try {
-    const project = await ownedProject(req, res);
+    const project = await accessibleProject(req, res);
     if (!project) return;
     const message = await ChatMessage.findOneAndDelete({
       _id: req.params.messageId, project: project._id, authorUid: req.firebaseUser.uid,
     });
     if (!message) return res.status(404).json({ error: "Message not found or you cannot delete it." });
+    emitToProject(req, project, "chat:message-deleted", { id: message.id });
     res.sendStatus(204);
   } catch (error) {
     console.error("Could not delete project message:", error.message);
     res.status(500).json({ error: "Could not delete that message." });
+  }
+});
+
+router.patch("/:slug/messages/:messageId/reactions", async (req, res) => {
+  if (!ensureDatabase(res)) return;
+  const emoji = typeof req.body?.emoji === "string" ? req.body.emoji : "";
+  if (!["👍", "🎉", "👀", "❤️"].includes(emoji)) return res.status(400).json({ error: "Choose a supported reaction." });
+
+  try {
+    const project = await accessibleProject(req, res);
+    if (!project) return;
+    const message = await ChatMessage.findOne({ _id: req.params.messageId, project: project._id });
+    if (!message) return res.status(404).json({ error: "Message not found." });
+
+    let reaction = message.reactions.find((item) => item.emoji === emoji);
+    if (!reaction) {
+      reaction = { emoji, users: [] };
+      message.reactions.push(reaction);
+    }
+    const index = reaction.users.indexOf(req.firebaseUser.uid);
+    const active = index === -1;
+    if (active) reaction.users.push(req.firebaseUser.uid);
+    else reaction.users.splice(index, 1);
+    if (reaction.users.length === 0) message.reactions = message.reactions.filter((item) => item.emoji !== emoji);
+    const count = reaction.users.length;
+    await message.save();
+
+    const update = { id: message.id, emoji, count, active, userId: req.firebaseUser.uid };
+    emitToProject(req, project, "chat:reaction-updated", update);
+    res.json({ message: messageResponse(message, req.firebaseUser.uid) });
+  } catch (error) {
+    console.error("Could not update project reaction:", error.message);
+    res.status(500).json({ error: "Could not update that reaction." });
   }
 });
 

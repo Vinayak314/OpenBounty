@@ -53,7 +53,7 @@ export default function ProjectPage() {
     <div className="flex h-screen min-h-0 overflow-hidden bg-[#f8fafc] font-sans leading-[normal] text-ob-navy">
       <ProjectSidebar project={project} />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <ChannelHeader project={project} query={query} onQuery={setQuery} sound={chat.sound} onToggleSound={() => chat.setSound((value) => !value)} />
+        <ChannelHeader project={project} query={query} onQuery={setQuery} sound={chat.sound} onToggleSound={() => chat.setSound((value) => !value)} connectionStatus={chat.connectionStatus} />
         <div className="flex min-h-0 flex-1">
           <main className="flex min-h-0 min-w-0 flex-1 flex-col">
             {chat.error && <p role="alert" className="border-b border-amber-200 bg-amber-50 px-6 py-2 text-xs text-amber-900">{chat.error}</p>}
@@ -70,11 +70,20 @@ export default function ProjectPage() {
             <Composer
               projectSlug={slug}
               projectName={project.name}
-              onSend={(text, files) => { chat.send(text, files, replyTo); setReplyTo(null); }}
+              onSend={async (text, files) => {
+                const sent = await chat.send(text, files, replyTo);
+                if (sent) setReplyTo(null);
+                return sent;
+              }}
+              onTyping={chat.typingActivity}
               replyTo={replyTo}
               onCancelReply={() => setReplyTo(null)}
               editing={editing}
-              onSaveEdit={(text) => { chat.edit(editing.id, text); setEditing(null); }}
+              onSaveEdit={async (text) => {
+                const saved = await chat.edit(editing.id, text);
+                if (saved) setEditing(null);
+                return saved;
+              }}
               onCancelEdit={() => setEditing(null)}
             />
           </main>

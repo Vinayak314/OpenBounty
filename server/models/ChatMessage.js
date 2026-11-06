@@ -15,6 +15,10 @@ const ChatMessageSchema = new mongoose.Schema({
     author: { type: String, default: "" },
     snippet: { type: String, default: "", maxlength: 120 },
   },
+  reactions: [{
+    emoji: { type: String, required: true, maxlength: 8 },
+    users: [{ type: String, required: true }],
+  }],
   edited: { type: Boolean, default: false },
 }, { timestamps: true });
 

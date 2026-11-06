@@ -24,7 +24,7 @@ const toDataUrl = (file) =>
     r.readAsDataURL(file);
   });
 
-export default function Composer({ onSend, replyTo, onCancelReply, editing, onSaveEdit, onCancelEdit, projectSlug, projectName }) {
+export default function Composer({ onSend, onTyping, replyTo, onCancelReply, editing, onSaveEdit, onCancelEdit, projectSlug, projectName }) {
   const draftKey = `ob-chat-draft:${projectSlug || "project"}`;
   const [text, setText] = useState(() => readDraft(draftKey));
   const [files, setFiles] = useState([]);
@@ -136,10 +136,12 @@ export default function Composer({ onSend, replyTo, onCancelReply, editing, onSa
     setFiles((cur) => [...cur, ...items]);
   };
 
-  const submit = () => {
+  const submit = async () => {
     if (!canSend) return;
+    onTyping?.(false);
     if (editing) return onSaveEdit(text.trim());
-    onSend(text.trim(), files);
+    const sent = await onSend(text.trim(), files);
+    if (sent === false) return;
     setText("");
     setFiles([]);
     setCaret(0);
@@ -236,6 +238,7 @@ export default function Composer({ onSend, replyTo, onCancelReply, editing, onSa
             value={text}
             onChange={(e) => {
               setText(e.target.value);
+              onTyping?.(Boolean(e.target.value.trim()));
               setCaret(e.target.selectionStart);
               setDismissed(false);
               setActive(0);
@@ -243,7 +246,7 @@ export default function Composer({ onSend, replyTo, onCancelReply, editing, onSa
             onSelect={(e) => setCaret(e.target.selectionStart)}
             onKeyDown={onKeyDown}
             onFocus={() => setFocused(true)}
-            onBlur={() => setFocused(false)}
+            onBlur={() => { setFocused(false); onTyping?.(false); }}
             onPaste={(e) => {
               const imgs = Array.from(e.clipboardData.files).filter((f) => f.type.startsWith("image/"));
               if (imgs.length && !editing) {
