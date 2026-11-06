@@ -49,7 +49,9 @@ function buildDiffBudget(files, maxChars) {
     const numbered = numberPatch(file.patch);
     if (numbered.length > budget) {
       if (budget > 1500) {
-        included.push({ path: file.path, text: numbered.slice(0, budget), partial: true });
+        const boundary = numbered.lastIndexOf("\n", budget);
+        if (boundary > 0) included.push({ path: file.path, text: numbered.slice(0, boundary), partial: true });
+        else omitted.push({ path: file.path, reason: "no full diff line fits the budget" });
         budget = 0;
       } else omitted.push({ path: file.path, reason: "diff budget exhausted" });
       continue;

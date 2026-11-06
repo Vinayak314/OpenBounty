@@ -183,6 +183,7 @@ function Message({ m, actions, onJump }) {
         {m.ai?.status === "ok" && m.ai.requestId && (
           <p className="mt-[5px] text-[10px] text-ob-slate" title="Traceability only, not proof the answer is correct">
             0G request <code className="font-mono">{m.ai.requestId}</code>{m.ai.model && <> · {m.ai.model}</>}
+            {m.ai.e2ee && <> · E2EE {m.ai.e2ee}</>}
             {m.ai.repoSha && <> · repo @ <code className="font-mono">{m.ai.repoSha.slice(0, 7)}</code>{m.ai.repoFiles?.length > 0 && <> · read {m.ai.repoFiles.join(", ")}</>}</>}
           </p>
         )}

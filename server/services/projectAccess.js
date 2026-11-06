@@ -2,6 +2,10 @@ const Project = require("../models/Project");
 require("../models/User");
 require("../models/Group");
 
+function isProjectMaintainer(project, firebaseUid) {
+  return project.owner?.firebaseUid === firebaseUid || project.coOwners?.some((user) => user?.firebaseUid === firebaseUid);
+}
+
 async function findProjectAccess(slug, firebaseUid) {
   const project = await Project.findOne({ slug })
     .populate("owner", "firebaseUid displayName photoURL")
@@ -12,8 +16,7 @@ async function findProjectAccess(slug, firebaseUid) {
     ] });
   if (!project) return { project: null, allowed: false };
 
-  const isOwner = project.owner?.firebaseUid === firebaseUid;
-  const isCoOwner = project.coOwners.some((user) => user.firebaseUid === firebaseUid);
+  const maintainsProject = isProjectMaintainer(project, firebaseUid);
   const isGroupOwner = project.group?.owner?.firebaseUid === firebaseUid;
   const isGroupMember = project.group?.members.some((member) => member.user?.firebaseUid === firebaseUid);
   const isGroupAdmin = project.group?.members.some((member) =>
@@ -22,9 +25,9 @@ async function findProjectAccess(slug, firebaseUid) {
   const projectScoped = !project.group || project.group.id === project.id;
   return {
     project,
-    allowed: Boolean(isOwner || isCoOwner || isGroupOwner || isGroupMember),
-    canManageGroup: Boolean(isGroupOwner || isGroupAdmin || (projectScoped && (isOwner || isCoOwner))),
+    allowed: Boolean(maintainsProject || isGroupOwner || isGroupMember),
+    canManageGroup: Boolean(isGroupOwner || isGroupAdmin || (projectScoped && maintainsProject)),
   };
 }
 
-module.exports = { findProjectAccess };
+module.exports = { findProjectAccess, isProjectMaintainer };

@@ -13,7 +13,7 @@ class AiError extends Error {
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // All model inference goes through 0G Private Computer (OpenAI-compatible router).
-// Returns { text, requestId, model, usage, finishReason }.
+// Returns { text, requestId, provider, trace, model, usage, finishReason }.
 async function chatCompletion({ messages, maxTokens, temperature = 0.2, signal } = {}, config = getAiConfig()) {
   if (!config.apiKey) throw new AiError("The AI service is not configured.", { code: "not_configured" });
 
@@ -53,10 +53,19 @@ async function chatCompletion({ messages, maxTokens, temperature = 0.2, signal }
       const choice = data?.choices?.[0];
       const text = typeof choice?.message?.content === "string" ? choice.message.content.trim() : "";
       if (!text) throw new AiError("The AI service returned an empty answer.", { code: "empty_output" });
+      const provider = String(data?.x_0g_trace?.provider || response.headers.get("x-provider") || "").slice(0, 200);
       return {
         text,
         requestId: data?.x_0g_trace?.request_id || headerRequestId || (typeof data.id === "string" ? data.id : ""),
-        provider: data?.x_0g_trace?.provider || response.headers.get("x-provider") || "",
+        provider,
+        // Transport/trust facts reported by the router. Traceability only; not proof the output is correct.
+        trace: {
+          provider,
+          e2ee: String(response.headers.get("x-0g-e2ee") || data?.x_0g_trace?.e2ee || "").slice(0, 40),
+          trustMode: config.trustMode || "",
+          promptTokens: Number(data?.usage?.prompt_tokens) || 0,
+          completionTokens: Number(data?.usage?.completion_tokens) || 0,
+        },
         model: typeof data.model === "string" ? data.model : config.model,
         usage: data.usage || null,
         finishReason: choice.finish_reason || "",

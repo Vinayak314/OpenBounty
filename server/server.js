@@ -2,6 +2,8 @@ require("dotenv").config();
 
 const express = require("express");
 const http = require("node:http");
+const path = require("node:path");
+const { existsSync } = require("node:fs");
 const mongoose = require("mongoose");
 const { Server: SocketIOServer } = require("socket.io");
 const meRouter = require("./routes/me");
@@ -61,6 +63,7 @@ io.on("connection", (socket) => {
   });
 });
 
+app.use("/api/webhooks/github", require("./routes/githubWebhooks"));
 app.use(express.json({ limit: "5mb" }));
 app.use((req, res, next) => {
   if (allowedOrigins.includes(req.headers.origin)) {
@@ -72,14 +75,30 @@ app.use((req, res, next) => {
   if (req.method === "OPTIONS") return res.sendStatus(204);
   next();
 });
-app.get("/", (_req, res) => res.send("OpenBounty API"));
+app.get("/api/health", (_req, res) => {
+  const ready = mongoose.connection.readyState === 1;
+  res.status(ready ? 200 : 503).json({ ready });
+});
 app.use("/api/me", meRouter);
 app.use("/api/projects", projectsRouter);
 app.use("/api/groups", groupsRouter);
+app.use("/api/demo/0g", require("./routes/reviewDemo"));
+app.use("/api", (_req, res) => res.status(404).json({ error: "API route not found." }));
+
+if (process.env.SERVE_CLIENT === "true") {
+  const client = path.join(__dirname, "../client/dist");
+  app.use(express.static(client));
+  app.get("/{*path}", (_req, res) => res.sendFile(path.join(client, "index.html")));
+} else {
+  app.get("/", (_req, res) => res.send("OpenBounty API"));
+}
 
 async function start() {
   if (!process.env.MONGODB_URI) {
     throw new Error("MONGODB_URI is missing. Add it to server/.env.");
+  }
+  if (process.env.SERVE_CLIENT === "true" && !existsSync(path.join(__dirname, "../client/dist/index.html"))) {
+    throw new Error("Build the client before setting SERVE_CLIENT=true.");
   }
 
   await mongoose.connect(process.env.MONGODB_URI);

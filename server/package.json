@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "node --test test/",
     "start": "nodemon server.js",
     "dev": "nodemon server.js",
     "node": "node server.js"
@@ -19,6 +19,7 @@
     "firebase-admin": "^14.3.0",
     "mongoose": "^9.12.0",
     "nodemon": "^3.1.11",
-    "socket.io": "^4.8.4"
+    "socket.io": "^4.8.4",
+    "tar-stream": "^3.2.2"
   }
 }

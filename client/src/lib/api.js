@@ -2,16 +2,16 @@ import { auth } from "../../firebase/firebase";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 
-export async function apiRequest(path, { method = "GET", body, ...options } = {}) {
+export async function apiRequest(path, { method = "GET", body, publicRequest = false, ...options } = {}) {
   const user = auth.currentUser;
-  if (!user) throw new Error("Sign in with GitHub before continuing.");
-  const token = await user.getIdToken();
+  if (!publicRequest && !user) throw new Error("Sign in with GitHub before continuing.");
+  const token = publicRequest ? "" : await user.getIdToken();
   const response = await fetch(`${API_URL}/api${path}`, {
     ...options,
     method,
     headers: {
       Accept: "application/json",
-      Authorization: `Bearer ${token}`,
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(body ? { "Content-Type": "application/json" } : {}),
       ...options.headers,
     },

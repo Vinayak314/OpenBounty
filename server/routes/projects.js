@@ -1,9 +1,14 @@
 const express = require("express");
 const mongoose = require("mongoose");
 const ChatMessage = require("../models/ChatMessage");
+const Project = require("../models/Project");
+const Review = require("../models/Review");
+const ReviewJob = require("../models/ReviewJob");
 const { requireFirebaseUser } = require("../middleware/requireFirebaseUser");
-const { findProjectAccess } = require("../services/projectAccess");
-const { messageResponse } = require("../services/chatSerializer");
+const { findProjectAccess, isProjectMaintainer } = require("../services/projectAccess");
+const { AGENT_UID, messageResponse, reportView } = require("../services/chatSerializer");
+const { approveCriteria, criteriaView, CriteriaError } = require("../services/criteria");
+const { fetchPullRequestHead } = require("../services/github");
 const aiOrchestrator = require("../services/ai/orchestrator");
 
 const router = express.Router();
@@ -43,6 +48,8 @@ router.get("/:slug", async (req, res) => {
       description: project.description, repository: project.githubRepository,
       owner: project.owner.displayName || project.owner.firebaseUid,
       canManageGroup,
+      canMaintain: project.status === "active" && isProjectMaintainer(project, req.firebaseUser.uid),
+      criteria: criteriaView(project.criteria),
     } });
   } catch (error) {
     console.error("Could not load project:", error.message);
@@ -59,6 +66,224 @@ router.get("/:slug/ai/status", async (req, res) => {
   } catch (error) {
     console.error("Could not load AI status:", error.message);
     res.status(500).json({ error: "Could not load AI status." });
+  }
+});
+
+router.get("/:slug/reviews", async (req, res) => {
+  if (!ensureDatabase(res)) return;
+  try {
+    const project = await accessibleProject(req, res);
+    if (!project) return;
+    const latest = await Review.aggregate([
+      { $match: { project: project._id } },
+      { $sort: { createdAt: -1, _id: -1 } },
+      { $group: { _id: "$prNumber", review: { $first: "$$ROOT" } } },
+      { $sort: { "review.createdAt": -1 } },
+      { $limit: 20 },
+    ]);
+    const jobs = await ReviewJob.find({ project: project._id }).sort({ updatedAt: -1 }).limit(20).lean();
+    res.json({
+      reviews: latest.map(({ review }) => reportView(Review.hydrate(review), project.criteria)),
+      jobs: jobs.map((job) => ({
+        prNumber: job.prNumber, status: job.status, source: job.source, headSha: job.headSha,
+        errorCode: job.errorCode, error: job.error, attempts: job.attempts, updatedAt: job.updatedAt,
+        reviewId: job.review ? String(job.review) : "",
+      })),
+      canApprove: project.status === "active" && isProjectMaintainer(project, req.firebaseUser.uid),
+      canRequest: project.status === "active" && Boolean(project.githubRepository?.fullName),
+    });
+  } catch (error) {
+    console.error("Could not load reviews:", error.message);
+    res.status(500).json({ error: "Could not load review evidence." });
+  }
+});
+
+router.post("/:slug/reviews/:reviewId/approve", async (req, res) => {
+  if (!ensureDatabase(res)) return;
+  if (!mongoose.isObjectIdOrHexString(req.params.reviewId)) return res.status(400).json({ error: "Invalid review." });
+  try {
+    const project = await accessibleProject(req, res);
+    if (!project) return;
+    if (project.status !== "active" || !isProjectMaintainer(project, req.firebaseUser.uid)) {
+      return res.status(403).json({ error: "Only an authorized maintainer can approve this review." });
+    }
+    const review = await Review.findOne({ _id: req.params.reviewId, project: project._id });
+    if (!review) return res.status(404).json({ error: "Review not found." });
+    const view = reportView(review, project.criteria);
+    if (view.stale || !review.requestId || !review.reportHash || req.body?.reportHash !== review.reportHash) {
+      return res.status(409).json({ error: "The evidence is missing or has changed. Open the latest report." });
+    }
+    const head = await fetchPullRequestHead(project.githubRepository.fullName, review.prNumber);
+    if (head.headSha !== review.headSha) {
+      await Review.updateOne({ _id: review._id }, { $set: { status: "stale" } });
+      return res.status(409).json({ error: "The PR commit changed. Run a new review before approving." });
+    }
+    if (head.state !== "merged") return res.status(409).json({ error: "Merge the reviewed PR on GitHub before approving its evidence." });
+    const current = await Project.exists({
+      _id: project._id, status: "active", "githubRepository.fullName": project.githubRepository.fullName,
+      "criteria.hash": review.criteriaHash, "criteria.version": review.criteriaVersion,
+    });
+    if (!current) return res.status(409).json({ error: "Project settings changed. Open the latest report." });
+
+    const filter = { _id: review._id, project: project._id, status: "complete", reportHash: review.reportHash };
+    const approved = await Review.findOneAndUpdate({ ...filter, "approval.at": { $exists: false } }, {
+      $set: {
+        prState: "merged",
+        approval: { byUid: req.firebaseUser.uid, byName: (req.firebaseUser.name || "Maintainer").slice(0, 120), at: new Date() },
+      },
+    }, { returnDocument: "after" }) || await Review.findOne(filter);
+    if (!approved?.approval?.at) return res.status(409).json({ error: "The review changed. Open the latest report." });
+    emitToProject(req, project, "review:completed", { reviewId: approved.id });
+    res.json({ review: reportView(approved, project.criteria) });
+  } catch (error) {
+    console.error("Could not approve review:", error.message);
+    res.status(error.code === "rate_limited" ? 503 : 500).json({ error: "Could not verify the GitHub PR for approval. Try again." });
+  }
+});
+
+// Ask for a fresh review (or a retry after a failure) of one PR. Same rate limits as `/review` in chat.
+router.post("/:slug/pulls/:prNumber/review", async (req, res) => {
+  if (!ensureDatabase(res)) return;
+  const prNumber = Number(req.params.prNumber);
+  try {
+    const project = await accessibleProject(req, res);
+    if (!project) return;
+    if (project.status !== "active" || !project.githubRepository?.fullName) {
+      return res.status(409).json({ error: "Connect an active GitHub repository before requesting reviews." });
+    }
+    const result = aiOrchestrator.requestReview({
+      io: req.app.get("io"), project, prNumber, uid: req.firebaseUser.uid, force: req.body?.force === true,
+    });
+    const codes = { queued: 202, invalid: 400, rate_limited: 429, busy: 503, disabled: 503 };
+    res.status(codes[result.status] || 500).json(result.error ? { error: result.error } : { status: result.status });
+  } catch (error) {
+    console.error("Could not request review:", error.message);
+    res.status(500).json({ error: "Could not request a review." });
+  }
+});
+
+router.get("/:slug/criteria", async (req, res) => {
+  if (!ensureDatabase(res)) return;
+  try {
+    const project = await accessibleProject(req, res);
+    if (!project) return;
+    res.json({
+      criteria: criteriaView(project.criteria),
+      canEdit: project.status === "active" && isProjectMaintainer(project, req.firebaseUser.uid),
+    });
+  } catch (error) {
+    console.error("Could not load criteria:", error.message);
+    res.status(500).json({ error: "Could not load criteria." });
+  }
+});
+
+async function maintainedProject(req, res) {
+  const project = await accessibleProject(req, res);
+  if (!project) return null;
+  if (project.status !== "active" || !isProjectMaintainer(project, req.firebaseUser.uid)) {
+    res.status(403).json({ error: "Only the project owner or a co-owner can change criteria." });
+    return null;
+  }
+  return project;
+}
+
+// Scope assistant (0G) drafts editable criteria. Nothing is saved until a maintainer approves.
+router.post("/:slug/criteria/draft", async (req, res) => {
+  if (!ensureDatabase(res)) return;
+  const task = typeof req.body?.task === "string" ? req.body.task.trim().slice(0, 2000) : "";
+  const issueNumber = req.body?.issueNumber == null || req.body.issueNumber === "" ? null : Number(req.body.issueNumber);
+  if (issueNumber !== null && (!Number.isSafeInteger(issueNumber) || issueNumber < 1)) {
+    return res.status(400).json({ error: "Enter a valid issue number." });
+  }
+  try {
+    const project = await maintainedProject(req, res);
+    if (!project) return;
+    const draft = await aiOrchestrator.draftCriteria({
+      io: req.app.get("io"), project, uid: req.firebaseUser.uid, authorName: req.firebaseUser.name || "", task, issueNumber,
+    });
+    res.json({ draft: { ...draft, trace: undefined, provider: draft.trace?.provider || "", e2ee: draft.trace?.e2ee || "" } });
+  } catch (error) {
+    const codes = { not_configured: 503, rate_limited: 429, timeout: 504, unreachable: 503, empty_question: 400,
+      issue_not_found: 404, malformed_output: 502, empty_output: 502, upstream_error: 502 };
+    if (!codes[error.code]) console.error("Criteria draft failed:", error.message);
+    res.status(codes[error.code] || 500).json({ error: codes[error.code] ? error.message : "Could not draft criteria.", code: error.code || "" });
+  }
+});
+
+// A maintainer approves the edited list. Creates a new version and stales evidence for older versions.
+router.put("/:slug/criteria", async (req, res) => {
+  if (!ensureDatabase(res)) return;
+  const items = Array.isArray(req.body?.items) ? req.body.items.filter((item) => typeof item === "string") : null;
+  const expectedVersion = Number.isSafeInteger(req.body?.expectedVersion) ? req.body.expectedVersion : undefined;
+  if (!items) return res.status(400).json({ error: "Send the criteria as a list of text items." });
+  try {
+    const project = await maintainedProject(req, res);
+    if (!project) return;
+    const byName = req.firebaseUser.name || "Maintainer";
+    const criteria = await approveCriteria({ project, texts: items, byUid: req.firebaseUser.uid, byName, expectedVersion });
+    const io = req.app.get("io");
+    io?.to(`project:${project.id}`).emit("criteria:updated", { version: criteria.version, hash: criteria.hash });
+    await aiOrchestrator.postAgentMessage({
+      io, project, trigger: { id: "", body: "", authorName: byName }, role: "scope",
+      body: aiOrchestrator.criteriaApprovedText(criteria, byName), ai: { status: "ok" },
+    });
+    res.json({ criteria: criteriaView(criteria) });
+  } catch (error) {
+    if (error instanceof CriteriaError) {
+      return res.status(error.code === "version_conflict" ? 409 : error.code === "project_not_found" ? 404 : 400).json({ error: error.message });
+    }
+    console.error("Could not approve criteria:", error.message);
+    res.status(500).json({ error: "Could not approve criteria." });
+  }
+});
+
+// Every 0G inference in this project's main flows (guide answers, criteria drafts, PR reviews) with its request ID.
+router.get("/:slug/ai/activity", async (req, res) => {
+  if (!ensureDatabase(res)) return;
+  try {
+    const project = await accessibleProject(req, res);
+    if (!project) return;
+    const agentFilter = { project: project._id, authorUid: AGENT_UID };
+    const [recent, totals] = await Promise.all([
+      ChatMessage.find({ ...agentFilter, $or: [{ "agent.requestId": { $nin: ["", null] } }, { "agent.status": "error" }] })
+        .sort({ _id: -1 }).limit(40).populate("review", "prNumber headSha verdict status").lean(),
+      ChatMessage.aggregate([
+        { $match: { ...agentFilter, "agent.requestId": { $nin: ["", null] } } },
+        { $group: { _id: "$agent.role", runs: { $sum: 1 },
+          tokens: { $sum: { $add: [{ $ifNull: ["$agent.promptTokens", 0] }, { $ifNull: ["$agent.completionTokens", 0] }] } } } },
+      ]),
+    ]);
+    const errors = await ChatMessage.countDocuments({ ...agentFilter, "agent.status": "error",
+      "agent.errorCode": { $nin: ["forbidden", "empty_question", "empty_criteria", "invalid_criteria", "wrong_repo", "stale", "draft"] } });
+    const byRole = Object.fromEntries(totals.map((row) => [row._id || "guide", { runs: row.runs, tokens: row.tokens }]));
+    res.json({
+      totals: {
+        runs: totals.reduce((sum, row) => sum + row.runs, 0),
+        tokens: totals.reduce((sum, row) => sum + row.tokens, 0),
+        byRole, errors,
+      },
+      provider: aiOrchestrator.status(),
+      recent: recent.map((message) => ({
+        id: String(message._id),
+        at: message.createdAt,
+        role: message.agent?.role || "guide",
+        status: message.agent?.status || "ok",
+        requestId: message.agent?.requestId || "",
+        model: message.agent?.model || "",
+        provider: message.agent?.provider || "",
+        e2ee: message.agent?.e2ee || "",
+        tokens: (message.agent?.promptTokens || 0) + (message.agent?.completionTokens || 0),
+        repoSha: message.agent?.repoSha || "",
+        errorCode: message.agent?.errorCode || "",
+        summary: String(message.body || "").replace(/\s+/g, " ").slice(0, 140),
+        review: message.review?.prNumber ? {
+          prNumber: message.review.prNumber, headSha: message.review.headSha, verdict: message.review.verdict, stale: message.review.status === "stale",
+        } : null,
+      })),
+    });
+  } catch (error) {
+    console.error("Could not load AI activity:", error.message);
+    res.status(500).json({ error: "Could not load AI activity." });
   }
 });
 
