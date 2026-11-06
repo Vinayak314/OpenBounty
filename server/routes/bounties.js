@@ -63,6 +63,11 @@ bounties.get("/", handle("Could not load bounties.", async (req, res) => {
   res.json({ bounties: views, limitation: svc.LIMITATION });
 }));
 
+// Registered before "/:number" so "issues" is never read as a bounty number.
+bounties.get("/issues", handle("Could not load the repository's issues.", async (req, res) => {
+  res.json({ issues: await svc.listIssues(req.project) });
+}));
+
 bounties.post("/", handle("Could not create the bounty.", async (req, res) => {
   const bounty = await svc.createDraft({ project: req.project, uid: req.firebaseUser.uid, name: req.firebaseUser.name, input: req.body || {} });
   await respond(req, res, bounty, 201);

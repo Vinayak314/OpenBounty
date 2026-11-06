@@ -319,6 +319,26 @@ async function fetchIssue(fullName, number) {
   };
 }
 
+// Open issues (not pull requests) of the project's public repository, newest first, for the bounty issue picker.
+const ISSUE_LIST_TTL_MS = 60 * 1000;
+const issueLists = new Map(); // fullName -> { at, value }
+
+async function listOpenIssues(fullName, { limit = 50 } = {}) {
+  if (!REPO_PATTERN.test(fullName || "")) throw new GithubError("This project has no valid GitHub repository.", "no_repo");
+  const key = fullName.toLowerCase();
+  const cached = issueLists.get(key);
+  if (cached && Date.now() - cached.at < ISSUE_LIST_TTL_MS) return cached.value;
+  // The endpoint mixes in pull requests, so fetch a full page and filter.
+  const rows = await api(`/repos/${fullName}/issues?state=open&sort=created&direction=desc&per_page=100`);
+  const value = rows.filter((row) => !row.pull_request).slice(0, limit).map((row) => ({
+    number: row.number, title: String(row.title || "").slice(0, 300), url: row.html_url || "",
+    labels: (row.labels || []).map((label) => String(label?.name || label || "").slice(0, 50)).filter(Boolean).slice(0, 5),
+  }));
+  if (issueLists.size >= MAX_SNAPSHOTS) issueLists.delete(issueLists.keys().next().value);
+  issueLists.set(key, { at: Date.now(), value });
+  return value;
+}
+
 async function fetchLinkedIssues(fullName, text) {
   const results = await Promise.allSettled(linkedIssueNumbers(text, fullName).map((number) => fetchIssue(fullName, number)));
   return results.filter((result) => result.status === "fulfilled" && result.value.kind === "issue").map((result) => result.value);
@@ -355,4 +375,4 @@ async function upsertReviewComment(fullName, number, marker, text, previousId) {
   return api(`${path}/${number}/comments`, { method: "POST", body, token });
 }
 
-module.exports = { fetchPullRequest, fetchPullRequestHead, fetchIssue, fetchLinkedIssues, linkedIssueNumbers, upsertReviewComment, reviewRepositoryEnabled, summarizeCi, buildRepoContext, getSnapshot, pickFiles, GithubError, REPO_PATTERN };
+module.exports = { listOpenIssues, fetchPullRequest, fetchPullRequestHead, fetchIssue, fetchLinkedIssues, linkedIssueNumbers, upsertReviewComment, reviewRepositoryEnabled, summarizeCi, buildRepoContext, getSnapshot, pickFiles, GithubError, REPO_PATTERN };

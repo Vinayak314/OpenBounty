@@ -5,6 +5,7 @@ const { chain, explorerTx } = require("./client");
 const { BOUNTY_STATUS, REFUND_REASONS } = require("./abi");
 const { formatUsdt } = require("./encoding");
 const { postWorkflowNotice, emitBounty, plainText } = require("../bounties/notify");
+const { announceOnIssue } = require("../bounties/issueSync");
 
 // Mirrors escrow events into MongoDB. Every log is applied once (unique txHash+logIndex), bounty updates are
 // ordered by (block, logIndex), and `reconcile` re-reads the contract to repair anything a missed log left behind.
@@ -87,6 +88,9 @@ async function applyToBounty(name, args, log) {
   if (result.modifiedCount) {
     emitBounty(bounty.project, bounty.number);
     if (notice) await postWorkflowNotice(bounty.project, notice);
+    if (["BountyFunded", "PayoutSettled", "BountyRefunded"].includes(name)) {
+      announceOnIssue(bounty, set.status, { tx, amount: args.amount }).catch(() => {});
+    }
   }
 }
 

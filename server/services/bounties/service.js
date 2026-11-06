@@ -9,7 +9,7 @@ const { signAttestation, escrowDigest } = require("../chain/eip712");
 const { createExecuteIntent, createSignIntent, onIntent, passkeyOf } = require("../chain/wallet");
 const { sendSponsored } = require("../chain/sponsor");
 const { processReceipt, reconcile } = require("../chain/indexer");
-const { fetchPullRequestHead, fetchIssue } = require("../github");
+const { fetchPullRequestHead, fetchIssue, listOpenIssues } = require("../github");
 const { isProjectMaintainer } = require("../projectAccess");
 const { normalizeTexts, criteriaError } = require("../criteria");
 const { reportView } = require("../chatSerializer");
@@ -92,6 +92,33 @@ function validateDraft(input, { partial = false } = {}) {
   return out;
 }
 
+// ---------- Issue links ----------
+
+const OPEN_STATUSES = ["draft", "funding", "funded", "claimed", "submitted"];
+
+/** One open bounty per issue: a paid or refunded bounty frees the issue again. */
+async function assertIssueFree(project, issueNumber, exceptId) {
+  if (!issueNumber) return;
+  const filter = { project: project._id, "issue.number": issueNumber, status: { $in: OPEN_STATUSES } };
+  if (exceptId) filter._id = { $ne: exceptId };
+  const existing = await Bounty.findOne(filter).select("number status");
+  if (existing) {
+    throw new BountyError(`Issue #${issueNumber} already has an open bounty (#${existing.number}, ${existing.status}). Finish or delete it first.`, 409, "issue_taken");
+  }
+}
+
+/** Open GitHub issues of the project's repository, each marked with the open bounty that already covers it. */
+async function listIssues(project) {
+  const fullName = project.githubRepository?.fullName;
+  if (!fullName) return [];
+  const [issues, taken] = await Promise.all([
+    listOpenIssues(fullName),
+    Bounty.find({ project: project._id, "issue.number": { $ne: null }, status: { $in: OPEN_STATUSES } }).select("number issue.number"),
+  ]);
+  const byIssue = new Map(taken.map((bounty) => [bounty.issue.number, bounty.number]));
+  return issues.map((issue) => ({ ...issue, bountyNumber: byIssue.get(issue.number) || null }));
+}
+
 async function createDraft({ project, uid, name, input }) {
   requireMaintainer(project, uid);
   const fields = validateDraft(input);
@@ -101,6 +128,7 @@ async function createDraft({ project, uid, name, input }) {
     if (!found || found.kind !== "issue") throw new BountyError(`Issue #${fields.issueNumber} was not found in ${project.githubRepository.fullName}.`);
     issue = { number: found.number, title: found.title, url: found.url };
   }
+  await assertIssueFree(project, issue?.number);
   const user = await loadUser(uid);
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const last = await Bounty.findOne({ project: project._id }).sort({ number: -1 }).select("number");
@@ -138,6 +166,7 @@ async function updateDraft({ project, uid, number, input }) {
       if (!found || found.kind !== "issue") throw new BountyError(`Issue #${fields.issueNumber} was not found.`);
       issue = { number: found.number, title: found.title, url: found.url };
     }
+    await assertIssueFree(project, issue?.number, bounty._id);
     set.issue = issue;
     set["chain.repoRef"] = enc.repoRefFor(project.githubRepository?.fullName || project.slug, issue?.number || 0);
   }
@@ -547,5 +576,5 @@ async function bountyView(bounty, { project, uid, viewerAccount, includeReview =
 module.exports = {
   BountyError, createDraft, updateDraft, deleteDraft, prepareFund, requestClaim, withdrawClaim, declineClaim, prepareAccept,
   submitPullRequest, preparePayout, prepareRefund, prepareCancelConsent, prepareCancel, expireClaim, bountyView, findBounty,
-  settlementFacts, BOUNTY_STATUS, LIMITATION,
+  settlementFacts, listIssues, BOUNTY_STATUS, LIMITATION,
 };

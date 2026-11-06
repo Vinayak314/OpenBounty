@@ -98,6 +98,26 @@ function BountyForm({ slug, base, onClose, onSaved, initial }) {
   const [error, setError] = useState("");
   const [draftInfo, setDraftInfo] = useState("");
   const set = (key) => (event) => setForm((current) => ({ ...current, [key]: event.target.value }));
+  const [issues, setIssues] = useState([]);
+  const [issuesNote, setIssuesNote] = useState("");
+
+  // Open issues of the project's repository. If GitHub is unreachable the typed number still works.
+  useEffect(() => {
+    const controller = new AbortController();
+    apiRequest(`${base}/issues`, { signal: controller.signal })
+      .then((data) => setIssues(data.issues || []))
+      .catch((loadError) => { if (loadError.name !== "AbortError") setIssuesNote("Could not load issues. Type the issue number instead."); });
+    return () => controller.abort();
+  }, [base]);
+
+  function pickIssue(event) {
+    const issue = issues.find((item) => String(item.number) === event.target.value);
+    setForm((current) => ({
+      ...current,
+      issueNumber: issue ? String(issue.number) : "",
+      title: current.title || issue?.title || "",
+    }));
+  }
 
   async function draftWith0g() {
     setBusy("draft");
@@ -143,8 +163,19 @@ function BountyForm({ slug, base, onClose, onSaved, initial }) {
       <h3 className="text-sm font-semibold">{initial?.number ? `Edit draft #${initial.number}` : "New bounty"}</h3>
       <label className="block text-xs font-semibold">Title<input required maxLength={200} value={form.title} onChange={set("title")} className={field} /></label>
       <label className="block text-xs font-semibold">Description<textarea rows={2} maxLength={4000} value={form.description} onChange={set("description")} className={field} /></label>
-      <div className="grid gap-3 sm:grid-cols-3">
-        <label className="block text-xs font-semibold">GitHub issue #<input inputMode="numeric" value={form.issueNumber} onChange={(event) => setForm((c) => ({ ...c, issueNumber: event.target.value.replace(/\D/g, "").slice(0, 7) }))} className={field} /></label>
+      <div className="grid gap-3 sm:grid-cols-4">
+        <label className="block text-xs font-semibold">GitHub issue
+          <select value={issues.some((item) => String(item.number) === form.issueNumber) ? form.issueNumber : ""} onChange={pickIssue} className={field}>
+            <option value="">{issues.length ? "Choose an open issue…" : "No open issues loaded"}</option>
+            {issues.map((item) => (
+              <option key={item.number} value={item.number} disabled={Boolean(item.bountyNumber) && String(item.number) !== form.issueNumber}>
+                #{item.number} {item.title.slice(0, 60)}{item.bountyNumber ? ` (bounty #${item.bountyNumber})` : ""}
+              </option>
+            ))}
+          </select>
+          {issuesNote && <span className="mt-1 block text-[11px] font-normal text-ob-slate">{issuesNote}</span>}
+        </label>
+        <label className="block text-xs font-semibold">or issue #<input inputMode="numeric" value={form.issueNumber} onChange={(event) => setForm((c) => ({ ...c, issueNumber: event.target.value.replace(/\D/g, "").slice(0, 7) }))} className={field} /></label>
         <label className="block text-xs font-semibold">Reward (USDT)<input required inputMode="decimal" placeholder="25" value={form.amount} onChange={set("amount")} className={field} /></label>
         <label className="block text-xs font-semibold">Submission deadline<input required type="datetime-local" value={form.submissionDeadline} onChange={set("submissionDeadline")} className={field} /></label>
       </div>
