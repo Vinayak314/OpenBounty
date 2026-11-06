@@ -301,6 +301,25 @@ function BountyDetail({ base, slug, summary, limitation, onChanged }) {
       {/* Review evidence + payout */}
       {bounty.review && <EvidenceReport report={bounty.review} />}
       {bounty.status === "submitted" && !bounty.review && <p className="text-xs text-ob-slate">Waiting for the 0G evidence report for PR #{bounty.submission?.prNumber}. Run <code>/review {bounty.submission?.prNumber}</code> in chat if it does not appear.</p>}
+      {(v.canToggleAutoPay || bounty.autoPay?.enabled) && (
+        <div className="space-y-1 rounded-lg border border-ob-line p-3">
+          <label className="flex items-start gap-2 text-xs font-semibold">
+            <input type="checkbox" checked={Boolean(bounty.autoPay?.enabled)} disabled={!v.canToggleAutoPay || Boolean(busy)}
+              onChange={(event) => plain("autopay", () => apiRequest(`${path}/autopay`, { method: "POST", body: { enabled: event.target.checked } }),
+                event.target.checked ? "Automatic payout is on. The reward is released after the PR is merged and the 0G report recommends approval." : "Automatic payout is off.")} />
+            <span>Pay automatically when the PR is merged and the 0G report recommends approval</span>
+          </label>
+          <p className="text-[11px] text-ob-slate">
+            Merging on GitHub is your approval. If the report asks for a person, the PR changes or the reward is above the escrow owner&rsquo;s limit, nothing is paid automatically and you can still approve manually.
+          </p>
+          {bounty.autoPay?.enabled && bounty.autoPay.state && (
+            <p role="status" className={`text-[11px] ${["blocked", "failed"].includes(bounty.autoPay.state) ? "text-amber-800" : "text-ob-slate"}`}>
+              Automatic payout: {{ waiting: "waiting", processing: "sending", paid: "paid", blocked: "paused", failed: "failed" }[bounty.autoPay.state]}
+              {bounty.autoPay.reason ? ` — ${bounty.autoPay.reason}` : ""}{bounty.autoPay.by ? ` (enabled by ${bounty.autoPay.by})` : ""}
+            </p>
+          )}
+        </div>
+      )}
       {v.canApprovePayout && (
         <div className="space-y-2 rounded-lg border border-ob-line p-3">
           <p className="text-xs font-semibold">Approve payout</p>

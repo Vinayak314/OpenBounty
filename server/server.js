@@ -120,6 +120,7 @@ async function start() {
     const { getChainConfig } = require("./config/chain");
     const config = getChainConfig();
     if (config.escrow) require("./services/chain/indexer").start();
+    if (config.autopayEnabled) require("./services/bounties/autopay").start();
     console.log(config.enabled ? `Payments enabled on ${config.networkName} (escrow ${config.escrow}).` : "Payments disabled: set ESCROW_ADDRESS, ACCOUNT_FACTORY_ADDRESS, SPONSOR_PRIVATE_KEY and ATTESTATION_PRIVATE_KEY.");
   } catch (error) {
     console.error("Payments could not start:", error.message);

@@ -33,6 +33,7 @@ export default function PasskeyAction({ label, prepare, onDone, compact = false,
       const outcome = await approveIntent(intent);
       setIntent(null);
       setResult(outcome);
+      window.dispatchEvent(new Event("ob:wallet-changed")); // refresh the navbar USDT balance
       onDone?.(outcome);
     } catch (approveError) {
       setError(approveError.message);

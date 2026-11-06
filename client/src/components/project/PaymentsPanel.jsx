@@ -12,6 +12,7 @@ export default function PaymentsPanel({ slug, refreshKey, onChanged }) {
   const [overview, setOverview] = useState(null);
   const [error, setError] = useState("");
   const [tick, setTick] = useState(0);
+  const [cap, setCap] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -93,6 +94,29 @@ export default function PaymentsPanel({ slug, refreshKey, onChanged }) {
               ))}
             </tbody>
           </table>
+          {overview.autoPay?.available && (
+            <div className="mt-3 rounded-lg border border-ob-line p-2">
+              <p className="font-semibold">Automatic payouts</p>
+              <p className="mt-1 text-ob-slate">
+                {overview.autoPay.enabled
+                  ? <>OpenBounty&rsquo;s payout agent <code>{shortAddress(overview.autoPay.agent)}</code> may release rewards of up to {overview.autoPay.capDisplay} USDT, only after a PR is merged and the 0G report recommends approval, and only to the claimant bound on chain. It cannot fund, refund or change roles.</>
+                  : "Off. Maintainers approve every payout with their passkey."}
+              </p>
+              {escrow.canManageRoles && (
+                <form className="mt-2 flex flex-wrap items-end gap-2" onSubmit={(event) => event.preventDefault()}>
+                  <label className="text-[11px] font-semibold">Limit per payout (USDT)
+                    <input inputMode="decimal" value={cap} onChange={(event) => setCap(event.target.value)} placeholder="e.g. 100" className="mt-1 block w-28 rounded-lg border border-ob-line p-2 font-normal" />
+                  </label>
+                  <PasskeyAction compact label={overview.autoPay.enabled ? "Update limit" : "Enable"} disabled={!cap}
+                    prepare={() => apiRequest(`/projects/${encodeURIComponent(slug)}/payments/autopay-agent`, { method: "POST", body: { maxUsdt: cap } })} onDone={refresh} />
+                  {overview.autoPay.enabled && (
+                    <PasskeyAction compact tone="secondary" label="Turn off"
+                      prepare={() => apiRequest(`/projects/${encodeURIComponent(slug)}/payments/autopay-agent`, { method: "POST", body: { maxUsdt: null } })} onDone={refresh} />
+                  )}
+                </form>
+              )}
+            </div>
+          )}
           {sponsor?.configured && (
             <p className="mt-3 text-[11px] text-ob-slate">
               Sponsor controls: allowlisted escrow/USDT calls only · {sponsor.limits.userTxPerHour}/user/hour, {sponsor.limits.userTxPerDay}/user/day,

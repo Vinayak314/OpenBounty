@@ -11,7 +11,7 @@ class ChainError extends Error {
 // One provider/wallet set per configuration. The sponsor key pays gas; the attestation key only signs.
 function chain() {
   const config = getChainConfig();
-  const key = [config.rpcUrl, config.chainId, config.escrow, config.accountFactory, config.token, config.sponsorKey, config.attestationKey].join("|");
+  const key = [config.rpcUrl, config.chainId, config.escrow, config.accountFactory, config.token, config.sponsorKey, config.attestationKey, config.autopayKey].join("|");
   if (cached?.key === key) return cached.value;
   const provider = new JsonRpcProvider(config.rpcUrl, config.chainId, { staticNetwork: true });
   const sponsor = config.sponsorKey ? new NonceManager(new Wallet(config.sponsorKey, provider)) : null;
@@ -19,8 +19,15 @@ function chain() {
   if (sponsor && attester && new Wallet(config.sponsorKey).address === attester.address) {
     throw new ChainError("SPONSOR_PRIVATE_KEY and ATTESTATION_PRIVATE_KEY must be different keys.", "misconfigured");
   }
+  // The auto-payout approver is a third, separate key: sharing one with the attester would let a single key
+  // satisfy both settlement authorizations (the escrow also rejects that), and sharing it with the sponsor would
+  // put payout authority on the key that is spent on gas.
+  const autopayer = config.autopayKey ? new Wallet(config.autopayKey) : null;
+  if (autopayer && [attester?.address, sponsor && new Wallet(config.sponsorKey).address].includes(autopayer.address)) {
+    throw new ChainError("AUTOPAY_PRIVATE_KEY must differ from the sponsor and attestation keys.", "misconfigured");
+  }
   const value = {
-    config, provider, sponsor, attester,
+    config, provider, sponsor, attester, autopayer,
     escrow: config.escrow ? new Contract(config.escrow, ESCROW_ABI, provider) : null,
     factory: config.accountFactory ? new Contract(config.accountFactory, FACTORY_ABI, provider) : null,
     token: new Contract(config.token, ERC20_ABI, provider),
@@ -57,6 +64,8 @@ const FRIENDLY = {
   ERC20InsufficientAllowance: "The escrow was not allowed to pull the USDT.",
   NotRefundAuthority: "Only the funder or a maintainer can return these funds.",
   PartiesNotDistinct: "The approver and the attestation signer must be different.",
+  AutoPayoutCapExceeded: "This reward is above the automatic payout limit the escrow owner set. A maintainer must approve it.",
+  InvalidAutoPayoutAgent: "That key cannot be the automatic payout agent (it must not be the owner, a maintainer or the attestation key).",
   OwnableUnauthorizedAccount: "Only the escrow owner can do this.",
   InvalidPublicKey: "The passkey public key is not valid.",
 };

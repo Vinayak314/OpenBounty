@@ -45,8 +45,12 @@ async function waitForRpc(provider) {
 }
 
 test("passkey accounts fund, claim, submit and settle a bounty with sponsored gas", { timeout: 240000 }, async (t) => {
-  const node = spawn("npx", ["hardhat", "node", "--port", String(PORT)], { cwd: CONTRACTS, stdio: "ignore" });
-  t.after(() => node.kill());
+  // On Windows npx is a .cmd shim, so it needs a shell, and killing the shell would orphan the node: use taskkill /T.
+  const win = process.platform === "win32";
+  const node = win
+    ? spawn("cmd", ["/c", "npx", "hardhat", "node", "--port", String(PORT)], { cwd: CONTRACTS, stdio: "ignore" })
+    : spawn("npx", ["hardhat", "node", "--port", String(PORT)], { cwd: CONTRACTS, stdio: "ignore" });
+  t.after(() => { if (win) require("node:child_process").spawnSync("taskkill", ["/pid", String(node.pid), "/T", "/F"]); else node.kill(); });
   const { MongoMemoryServer } = require("mongodb-memory-server");
   const mongo = await MongoMemoryServer.create();
   t.after(async () => { await mongoose.disconnect(); await mongo.stop(); });

@@ -85,8 +85,8 @@ async function status({ detailed = false } = {}) {
  * call would revert, so no gas is spent on failing actions.
  */
 async function sendSponsored({ userUid = "", kind, to, data, account = "", bounty, isAccount = false }) {
-  const { config, provider, sponsor } = chain();
-  assertAllowedSponsorTx({ to, data }, { escrow: config.escrow, factory: config.accountFactory, isAccount });
+  const { config, provider, sponsor, autopayer } = chain();
+  assertAllowedSponsorTx({ to, data }, { escrow: config.escrow, factory: config.accountFactory, isAccount, autopay: autopayer?.address });
   const record = await reserve({ userUid, kind, to, account, bounty });
   const from = await sponsor.getAddress();
   const cap = BigInt(config.sponsor.maxGasPerTx);

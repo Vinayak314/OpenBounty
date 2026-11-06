@@ -15,8 +15,11 @@ const ESCROW_ABI = [
   `function cancelByAgreement(bytes32 bountyId, uint32 claimVersion, ${AUTH} funderSide, ${AUTH} claimant)`,
   "function setMaintainer(address account, bool enabled)",
   "function setSettlementWallet(address account, bool enabled)",
+  "function setAutoPayoutAgent(address account, uint256 maxAmount)",
   "function acceptOwnership()",
   "function invalidateNonce(uint256 nonce)",
+  "function autoPayoutCap(address account) view returns (uint256)",
+  "function canAutoPay(address account, uint256 amount) view returns (bool)",
   "function owner() view returns (address)",
   "function pendingOwner() view returns (address)",
   "function attestationSigner() view returns (address)",
@@ -29,6 +32,7 @@ const ESCROW_ABI = [
   "function getBounty(bytes32 bountyId) view returns (tuple(address funder, uint8 status, uint32 claimVersion, uint64 submissionDeadline, address token, uint256 amount, bytes32 criteriaHash, bytes32 repoRef, bytes32 termsHash, address recipient, uint64 claimExpiry, bytes32 submissionRef))",
   "event MaintainerUpdated(address indexed account, bool enabled)",
   "event SettlementWalletUpdated(address indexed account, bool enabled)",
+  "event AutoPayoutAgentUpdated(address indexed account, uint256 maxAmount)",
   "event AttestationSignerUpdated(address indexed previousSigner, address indexed newSigner)",
   "event OwnershipTransferred(address indexed previousOwner, address indexed newOwner)",
   "event BountyFunded(bytes32 indexed bountyId, address indexed funder, address indexed token, uint256 amount, bytes32 criteriaHash, bytes32 repoRef, uint64 submissionDeadline, bytes32 termsHash)",
@@ -45,6 +49,7 @@ const ESCROW_ABI = [
   "error InvalidSignature()", "error SettlementMismatch()", "error SelfPayment()", "error NotRefundAuthority(address account)",
   "error PartiesNotDistinct()", "error UnexpectedTransferAmount(uint256 expected, uint256 received)", "error Unsupported()",
   "error OwnableUnauthorizedAccount(address account)",
+  "error AutoPayoutCapExceeded(uint256 amount, uint256 cap)", "error InvalidAutoPayoutAgent(address account)",
 ];
 
 const ACCOUNT_ABI = [

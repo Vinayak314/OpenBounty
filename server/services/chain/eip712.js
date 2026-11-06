@@ -23,6 +23,12 @@ const ESCROW_TYPES = {
     { name: "bountyId", type: "bytes32" }, { name: "claimVersion", type: "uint32" }, { name: "recipient", type: "address" },
     { name: "submissionRef", type: "bytes32" }, { name: "nonce", type: "uint256" }, { name: "expiry", type: "uint256" },
   ],
+  PayoutApproval: [
+    { name: "bountyId", type: "bytes32" }, { name: "claimVersion", type: "uint32" }, { name: "recipient", type: "address" },
+    { name: "amount", type: "uint256" }, { name: "criteriaHash", type: "bytes32" }, { name: "reviewedSha", type: "bytes32" },
+    { name: "mergeRef", type: "bytes32" }, { name: "reportHash", type: "bytes32" }, { name: "nonce", type: "uint256" },
+    { name: "deadline", type: "uint256" },
+  ],
 };
 
 const ACCOUNT_TYPES = {
@@ -61,6 +67,18 @@ async function signAttestation({ signer, chainId, escrow, type, value, ttlSecond
   return { nonce, expiry, signature };
 }
 
+/**
+ * PayoutApproval signed by the automatic-payout key (an EOA, so ECDSA). Returns the escrow's `Auth` struct.
+ * The escrow only accepts it from a registered agent, within that agent's cap, alongside a settlement attestation.
+ */
+async function signPayoutApproval({ signer, chainId, escrow, value, ttlSeconds = 15 * 60, now = Math.floor(Date.now() / 1000) }) {
+  const nonce = randomNonce();
+  const deadline = now + Math.min(Math.max(ttlSeconds, 60), 60 * 60);
+  const message = pick("PayoutApproval", { ...value, nonce, deadline });
+  const signature = await signer.signTypedData(escrowDomain(chainId, escrow), { PayoutApproval: ESCROW_TYPES.PayoutApproval }, message);
+  return { signer: signer.address, nonce, deadline, signature };
+}
+
 const escrowInterface = new Interface(ESCROW_ABI);
 
-module.exports = { ESCROW_TYPES, ACCOUNT_TYPES, escrowDomain, accountDomain, executeDigest, escrowDigest, signAttestation, escrowInterface };
+module.exports = { ESCROW_TYPES, ACCOUNT_TYPES, escrowDomain, accountDomain, executeDigest, escrowDigest, signAttestation, signPayoutApproval, escrowInterface };

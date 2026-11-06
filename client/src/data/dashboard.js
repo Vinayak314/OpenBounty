@@ -1,6 +1,6 @@
 // Copy and navigation shared by the dashboard and app shell.
 export const currentUser = { name: "GitHub user", firstName: "GitHub user", handle: "GitHub account", initials: "GH" };
-export const appNetwork = { label: "Base · USDC" };
+export const appNetwork = { label: "Whitechain Sepolia · USDT" };
 export const navItems = [
   { id: "dashboard", label: "Dashboard", to: "/dashboard", icon: "dashboard" },
   { id: "profile", label: "Profile", to: "/profile", icon: "profile" },

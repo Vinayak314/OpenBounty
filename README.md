@@ -90,9 +90,11 @@ Run the offline tests with `cd server && npm test`.
 
 ## Whitechain · Payments nobody notices
 
-Bounties are paid in the designated test USDT (`0xcedfB56113143d55b2358b8CFbB0dEB5Ad2f55a7`) through a Solidity escrow on **Whitechain Sepolia (chain 1874)**. Payers and contributors sign in with GitHub and approve payments with a **passkey** (fingerprint, face or device PIN). They never see a seed phrase, never install a wallet, never switch networks and never hold WBT: OpenBounty's gas sponsor pays every network fee, including the token approval and the deposit.
+Bounties are paid in the designated test USDT (`0xcedfB56113143d55b2358b8CFbB0dEB5Ad2f55a7`) through a Solidity escrow on **Whitechain Sepolia (chain 1874)**. Payers and contributors sign in with GitHub and approve payments with a **passkey** (fingerprint, face or device PIN). They never see a seed phrase, never install a wallet, never switch networks and never hold WBT: OpenBounty's gas sponsor pays every network fee, including the token approval and the deposit. Token roles follow the ETHGlobal prize page: **USDT is the settlement token** (rewards, escrow, payouts) and **WBT is only the native gas token**, spent by the sponsor. Rewards are deliberately not paid in WBT: the track requires a designated-USDT settlement, and payers must hold no WBT.
 
 **Why on-chain stablecoin settlement.** A funded bounty reserves the exact reward and programmatically restricts release and refunds (one bound claimant, expiry rules, refund rules, a required human approval plus a backend attestation) while exposing a shared, verifiable receipt to both parties. A plain transfer or a conventional payment rail cannot hold a reward against approved criteria, lock it from unilateral withdrawal once work is submitted, or let funder and contributor audit the same payout record. This secures deposited funds under stated rules; it does not guarantee fair review or code quality.
+
+**Where the USDT lives.** A user's USDT is held by their own payment account: an `OpenBountyAccount` smart contract on Whitechain Sepolia whose address is derived from their passkey's public key. There is no MetaMask or seed phrase. The navbar shows the account's USDT balance; click it for the address, a copy button and explorer links (address page and USDT transfers). USDT locked in a funded bounty sits in the escrow contract instead, and returns to the account on payout or refund. A new account is just an address until its first sponsored transaction deploys it, so an explorer may show it as empty until then.
 
 ### How a payment works
 
@@ -106,10 +108,20 @@ Bounties are paid in the designated test USDT (`0xcedfB56113143d55b2358b8CFbB0dE
 
 Payment state in MongoDB comes only from escrow events and contract reads that the backend fetches itself, never from a client-supplied transaction hash. The indexer applies each log once (unique `txHash`+`logIndex`), orders updates by block and log index, and periodically reconciles active bounties with `getBounty`/`effectiveStatus`, so a missed event is repaired without double-applying anything.
 
+### Automatic payouts
+
+By default a maintainer approves each payout with a passkey. A maintainer can instead tick **Pay automatically** on a funded bounty, so the reward is released by itself once the PR is merged and the current 0G report says "Recommend approval". There is no extra click, but there is still human authorization at two points: the maintainer who opted in, and the maintainer who merges the PR on GitHub.
+
+- **Agent role:** the escrow owner registers one payout agent (the address of `AUTOPAY_PRIVATE_KEY`) in **Payments → Automatic payouts**, with a per-payout limit in USDT (`setAutoPayoutAgent`). The agent can approve `settle` only. It cannot fund, refund, accept claims, cancel or change roles, and the contract refuses an agent that is the owner, a maintainer or the attestation key.
+- **Still two separate signatures:** the escrow needs the backend attestation (GitHub facts) and the agent's approval over the same facts, from different keys. It pays only the recipient bound when the claim was accepted, exactly once.
+- **What it re-checks before paying:** the PR is merged, its author is still the claimant, the head commit is the reviewed one, a current 0G report exists for the bounty's criteria and recommends approval, and the maintainer who opted in still has access. A report that asks for a person, a changed commit, a failed transaction (5 attempts) or an amount over the limit stops automation, posts a notice in the project chat and leaves manual **Approve payout** available.
+- **Trigger:** a finished review of the PR (including the one after merge) and a 2-minute sweep as a safety net for missed webhooks.
+- **Trust you accept:** the backend holds the agent key and the attestation key. If both leak, an attacker can pay out submitted bounties, but only to the already-bound claimant, only up to the owner's limit, and never withdraw to another address. Turn the agent off at any time from the same panel.
+
 ### Gas funding and abuse prevention
 
 - **Who pays:** one sponsor key (`SPONSOR_PRIVATE_KEY`) holding test WBT, server-side only. It has **no authority** in the escrow. Every privileged action is authorized by the passkey signature inside `execute`, or by the separate attestation key, and the escrow checks signers, never the relayer.
-- **Only allowlisted calls:** the server builds every batch itself. Defense in depth then allows only `USDT.approve` with the escrow as spender and an amount under the cap, plus the escrow's bounty and role functions. Directly sent transactions are limited to `factory.createAccount`, `registerSubmission` and `expireClaim`. Value transfers and any other contract are rejected.
+- **Only allowlisted calls:** the server builds every batch itself. Defense in depth then allows only `USDT.approve` with the escrow as spender and an amount under the cap, plus the escrow's bounty and role functions. Directly sent transactions are limited to `factory.createAccount`, `registerSubmission`, `expireClaim` and an automatic `settle` approved by the configured payout agent. Value transfers and any other contract are rejected.
 - **Authenticated, signed, expiring requests:** each action is a server-side intent tied to the signed-in user, the account nonce and a 10-minute deadline. The passkey assertion must match the intent digest, the site's origin and RP ID, and require user verification (biometric or PIN). The account contract enforces the same digest, nonce and deadline (at most 1 hour) on chain.
 - **Limits:** per user (12/hour, 40/day), global (200/hour), maximum gas per transaction, a daily WBT budget, and a minimum sponsor balance below which sponsorship pauses with a clear "temporarily unavailable" message. Every sponsored transaction is recorded in `SponsoredTx`. Each action is simulated with `estimateGas` first, so failing actions cost nothing and show the decoded reason.
 
@@ -118,7 +130,7 @@ The project's **Bounties** tab shows sponsor health, the daily budget used, and 
 ### Set up payments
 
 1. Deploy the passkey account factory: `cd contracts && npx hardhat run scripts/deployAccountFactory.js --network whitechainSepolia`. Put its address in `ACCOUNT_FACTORY_ADDRESS`.
-2. Create two **test** keys: the sponsor (fund it with WBT from the faucet) and the attestation signer. Set `SPONSOR_PRIVATE_KEY` and `ATTESTATION_PRIVATE_KEY`.
+2. Create two **test** keys: the sponsor (fund it with WBT from the faucet) and the attestation signer. Set `SPONSOR_PRIVATE_KEY` and `ATTESTATION_PRIVATE_KEY`. For automatic payouts add a third unfunded key as `AUTOPAY_PRIVATE_KEY` (see [Automatic payouts](#automatic-payouts)).
 3. Start the app. The project owner opens **Wallet** and creates a passkey payment account, then copies its address.
 4. Deploy the escrow with that account as owner: `OWNER_ADDRESS=<owner account> ATTESTATION_SIGNER_ADDRESS=<attestation address> npx hardhat run scripts/deploy.js --network whitechainSepolia`. Set `ESCROW_ADDRESS` and `ESCROW_DEPLOY_BLOCK`. If the escrow already exists, run `scripts/transferOwnership.js` and click **Accept escrow ownership** in the Bounties tab.
 5. In **Bounties → Payment permissions**, the owner grants co-owners the maintainer and payout permissions (one passkey approval each).

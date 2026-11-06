@@ -34,6 +34,8 @@ function getChainConfig(env = process.env) {
     // Keys live only in the backend environment. The attestation key and the sponsor key must differ.
     sponsorKey: env.SPONSOR_PRIVATE_KEY || "",
     attestationKey: env.ATTESTATION_PRIVATE_KEY || "",
+    // Automatic payouts: a third key that may approve `settle` only, up to the cap registered on the escrow.
+    autopayKey: env.AUTOPAY_PRIVATE_KEY || "",
     indexerStartBlock: int(env.ESCROW_DEPLOY_BLOCK, 0),
     // Blocks to stay behind the head before indexing (shallow reorg protection).
     indexerConfirmations: Math.min(int(env.INDEXER_CONFIRMATIONS, 2), 64),
@@ -55,6 +57,7 @@ function getChainConfig(env = process.env) {
     },
   };
   config.enabled = env.PAYMENTS_ENABLED !== "false" && Boolean(config.escrow && config.accountFactory && config.sponsorKey && config.attestationKey);
+  config.autopayEnabled = config.enabled && Boolean(config.autopayKey) && env.AUTOPAY_ENABLED !== "false";
   config.accountsEnabled = env.PAYMENTS_ENABLED !== "false" && Boolean(config.accountFactory);
   return config;
 }
@@ -63,6 +66,7 @@ function publicChainConfig(config = getChainConfig()) {
   return {
     enabled: config.enabled,
     accountsEnabled: config.accountsEnabled,
+    autopayEnabled: config.autopayEnabled,
     chainId: config.chainId,
     networkName: config.networkName,
     explorerUrl: config.explorerUrl,

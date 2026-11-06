@@ -5,6 +5,7 @@ const { ESCROW_ABI } = require("../chain/abi");
 const { publicChainConfig } = require("../../config/chain");
 const { createExecuteIntent, passkeyOf, accountSummary } = require("../chain/wallet");
 const sponsor = require("../chain/sponsor");
+const enc = require("../chain/encoding");
 const { BountyError } = require("./service");
 
 const escrowIface = new Interface(ESCROW_ABI);
@@ -46,6 +47,12 @@ async function paymentsOverview(project, uid) {
     canAcceptOwnership: isProjectOwner && Boolean(viewerAccount) && viewerAccount === lower(pendingOwner),
     ownerIsProjectOwner: overview.members.some((m) => m.role === "owner" && lower(m.account) === lower(owner)),
   };
+  // Automatic payouts: public facts only (the agent's address is not a secret; its key never leaves the server).
+  overview.autoPay = { enabled: false, available: false, agent: "", capUnits: "0", capDisplay: "0" };
+  if (c.config.autopayEnabled && c.autopayer) {
+    const cap = await c.escrow.autoPayoutCap(c.autopayer.address).catch(() => 0n);
+    overview.autoPay = { available: true, enabled: cap > 0n, agent: c.autopayer.address, capUnits: cap.toString(), capDisplay: enc.formatUsdt(cap) };
+  }
   return overview;
 }
 
@@ -72,6 +79,30 @@ async function prepareRoles({ project, uid, targetUid, maintainer, settlement })
     summary: `On the escrow: ${changes.join(" and ")} for ${member.name} (${account.slice(0, 6)}…${account.slice(-4)}).` });
 }
 
+/** The escrow owner registers (or removes) OpenBounty's automatic payout agent with a per-payout cap, in USDT. */
+async function prepareAutoPayAgent({ project, uid, maxUsdt }) {
+  const { config, escrow, autopayer } = requirePayments();
+  if (!config.autopayEnabled || !autopayer) throw new BountyError("Automatic payout is not configured on this server.", 409, "autopay_unavailable");
+  if (project.owner?.firebaseUid !== uid) throw new BountyError("Only the project owner manages payment permissions.", 403);
+  const user = await User.findOne({ firebaseUid: uid });
+  const wallet = passkeyOf(user);
+  if (lower(await escrow.owner()) !== lower(wallet.address)) {
+    throw new BountyError("Your payment account is not the escrow owner. Accept the ownership transfer first.", 409, "not_escrow_owner");
+  }
+  let cap = 0n;
+  if (maxUsdt !== null && maxUsdt !== undefined && maxUsdt !== "") {
+    try { cap = enc.parseUsdt(maxUsdt); } catch (error) { throw new BountyError(error.message, 400); }
+    if (cap > config.sponsor.maxBountyUnits) throw new BountyError("That limit is above this server's bounty limit.", 400);
+  }
+  const current = await escrow.autoPayoutCap(autopayer.address);
+  if (current === cap) throw new BountyError("Nothing to change.", 400);
+  const summary = cap === 0n
+    ? "On the escrow: turn automatic payouts off (remove the payout agent)."
+    : `On the escrow: let OpenBounty's payout agent release rewards of up to ${enc.formatUsdt(cap)} USDT after a PR is merged and the 0G report recommends approval. It can do nothing else.`;
+  return createExecuteIntent({ user, kind: "roles", project: project._id, summary,
+    calls: [{ target: config.escrow, value: 0n, data: escrowIface.encodeFunctionData("setAutoPayoutAgent", [autopayer.address, cap]) }] });
+}
+
 async function prepareAcceptOwnership({ project, uid }) {
   const { config, escrow } = requirePayments();
   if (project.owner?.firebaseUid !== uid) throw new BountyError("Only the project owner can take escrow ownership.", 403);
@@ -83,4 +114,4 @@ async function prepareAcceptOwnership({ project, uid }) {
     summary: "Become the escrow owner: you will manage who can fund bounties and approve payouts. You cannot move escrowed funds." });
 }
 
-module.exports = { paymentsOverview, prepareRoles, prepareAcceptOwnership };
+module.exports = { paymentsOverview, prepareRoles, prepareAutoPayAgent, prepareAcceptOwnership };

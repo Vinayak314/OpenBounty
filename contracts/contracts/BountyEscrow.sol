@@ -143,6 +143,10 @@ contract BountyEscrow is EIP712, Ownable2Step, ReentrancyGuard {
     mapping(address token => bool) public isTokenAllowed;
     mapping(address account => bool) public isMaintainer;
     mapping(address account => bool) public isSettlementWallet;
+    /// @notice Per-payout cap (token base units) for an automated payout agent; 0 = not an agent.
+    ///         An agent can authorize `settle` ONLY (never fund, refund, accept, cancel or manage roles),
+    ///         and only up to its cap. It still needs the separate backend attestation.
+    mapping(address account => uint256) public autoPayoutCap;
 
     mapping(bytes32 bountyId => Bounty) private _bounties;
     mapping(address signer => mapping(uint256 nonce => bool)) public usedAuthNonce;
@@ -154,6 +158,7 @@ contract BountyEscrow is EIP712, Ownable2Step, ReentrancyGuard {
 
     event MaintainerUpdated(address indexed account, bool enabled);
     event SettlementWalletUpdated(address indexed account, bool enabled);
+    event AutoPayoutAgentUpdated(address indexed account, uint256 maxAmount);
     event AttestationSignerUpdated(address indexed previousSigner, address indexed newSigner);
     event TokenAllowlistUpdated(address indexed token, bool allowed);
     event NonceInvalidated(address indexed signer, uint256 nonce);
@@ -213,6 +218,8 @@ contract BountyEscrow is EIP712, Ownable2Step, ReentrancyGuard {
     error ZeroAddress();
     error NotMaintainer(address account);
     error NotPayoutAuthority(address account);
+    error AutoPayoutCapExceeded(uint256 amount, uint256 cap);
+    error InvalidAutoPayoutAgent(address account);
     error TokenNotAllowed(address token);
     error InvalidTerms();
     error BountyExists(bytes32 bountyId);
@@ -272,6 +279,19 @@ contract BountyEscrow is EIP712, Ownable2Step, ReentrancyGuard {
         if (account == address(0)) revert ZeroAddress();
         isSettlementWallet[account] = enabled;
         emit SettlementWalletUpdated(account, enabled);
+    }
+
+    /// @notice Register (or, with `maxAmount == 0`, remove) an automated payout agent: a dedicated
+    ///         key that may authorize `settle` for amounts up to `maxAmount`, so a payout can follow a
+    ///         merged, reviewed PR without a person clicking. The agent must be a fresh key: not the owner,
+    ///         not a maintainer and not the attestation signer, so it never gains any other authority.
+    function setAutoPayoutAgent(address account, uint256 maxAmount) external onlyOwner {
+        if (account == address(0)) revert ZeroAddress();
+        if (maxAmount != 0 && (account == owner() || isMaintainer[account] || account == attestationSigner)) {
+            revert InvalidAutoPayoutAgent(account);
+        }
+        autoPayoutCap[account] = maxAmount;
+        emit AutoPayoutAgentUpdated(account, maxAmount);
     }
 
     /// @notice Rotate the backend attestation key. Does not touch any funded term.
@@ -523,7 +543,14 @@ contract BountyEscrow is EIP712, Ownable2Step, ReentrancyGuard {
                 )
             )
         );
-        if (!_canAuthorizePayout(approval.signer)) revert NotPayoutAuthority(approval.signer);
+        uint256 agentCap = autoPayoutCap[approval.signer];
+        if (agentCap != 0) {
+            // An automated agent holds no role at all, so a role granted later cannot widen it beyond settle.
+            if (_hasMaintainerRole(approval.signer)) revert InvalidAutoPayoutAgent(approval.signer);
+            if (s.amount > agentCap) revert AutoPayoutCapExceeded(s.amount, agentCap);
+        } else if (!_canAuthorizePayout(approval.signer)) {
+            revert NotPayoutAuthority(approval.signer);
+        }
         if (approval.signer == b.recipient) revert SelfPayment();
         // "Both" must mean two different keys, whatever the owner configures: a signer rotation onto
         // a payout-authorized key (or the owner) must not let one key satisfy both authorizations.
@@ -630,6 +657,12 @@ contract BountyEscrow is EIP712, Ownable2Step, ReentrancyGuard {
 
     function canAuthorizePayout(address account) external view returns (bool) {
         return _canAuthorizePayout(account);
+    }
+
+    /// @notice True when `account` is a registered automated payout agent able to approve `amount`.
+    function canAutoPay(address account, uint256 amount) external view returns (bool) {
+        uint256 cap = autoPayoutCap[account];
+        return cap != 0 && amount <= cap && !_hasMaintainerRole(account);
     }
 
     /*//////////////////////////////////////////////////////////////

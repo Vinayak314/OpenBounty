@@ -471,6 +471,7 @@ Start the server. *After the indexer catches up (about a minute), every bounty i
 | `PAYMENTS_ENABLED`, `WHITECHAIN_*`, `USDT_ADDRESS` | server | Network and token |
 | `ACCOUNT_FACTORY_ADDRESS`, `ESCROW_ADDRESS`, `ESCROW_DEPLOY_BLOCK` | server | Deployed contracts |
 | `SPONSOR_PRIVATE_KEY`, `ATTESTATION_PRIVATE_KEY` | server | Gas sponsor and GitHub attestations (separate keys) |
+| `AUTOPAY_PRIVATE_KEY` | server | Optional third key (no funds) that approves automatic payouts; the owner registers its address with a cap in Payments |
 | `WEBAUTHN_RP_ID`, `WEBAUTHN_ORIGINS` | server | Passkey domain binding |
 | `SPONSOR_*`, `INDEXER_*` | server | Sponsor limits and indexer behavior |
 | `SERVE_CLIENT`, `TRUST_PROXY`, `CLIENT_ORIGINS` | server | Hosting |

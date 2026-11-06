@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Bell, BellOff, Ellipsis, Search, X } from "lucide-react";
+import WalletBalanceChip from "@/components/wallet/WalletBalanceChip";
 
 const SUBTITLES = {
   chat: "Talk with members and the 0G agent. Type / for commands.",
@@ -29,6 +30,7 @@ export default function ChannelHeader({ title, view = "chat", query, onQuery, so
         <p className="mt-[7px] truncate text-[10px] text-ob-slate">{SUBTITLES[view]}</p>
       </div>
       <div className="flex shrink-0 items-center gap-3 text-ob-navy">
+        <WalletBalanceChip />
         <span className="flex items-center gap-1.5 rounded-full bg-ob-mist px-[10px] py-[5px] text-[10px] font-semibold" title={connectionStatus}>
           <span className={`size-1.5 rounded-full ${connectionStatus === "connected" ? "bg-emerald-500" : connectionStatus === "offline" ? "bg-rose-500" : "animate-pulse bg-amber-500"}`} />
           {connectionStatus === "connected" ? "Live" : connectionStatus === "offline" ? "Offline" : "Connecting"}

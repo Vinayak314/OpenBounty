@@ -108,6 +108,14 @@ To deploy and test, follow [TESTING_AND_DEPLOYMENT.md](TESTING_AND_DEPLOYMENT.md
 - [~] Re-run the live flows (question, criteria draft, incomplete then fixed PR) on the final build.
 - [ ] Private (TEE) provider: `glm-5.2` had none, so reports state that no trust mode was requested.
 
+## Automatic payout (added 2026-11-06)
+
+- [x] Escrow: `setAutoPayoutAgent` with a per-payout cap; the agent can approve `settle` only and the backend attestation is still required. 8 Hardhat tests.
+- [x] Server: per-bounty opt-in, trigger after each review plus a 2-minute sweep, re-checks every settlement fact, atomic attempt claim, 5-attempt limit, chat notices, `AUTOPAY_PRIVATE_KEY` kept separate from the sponsor and attestation keys.
+- [x] Client: opt-in checkbox and status on the bounty, owner controls in Payments.
+- [~] End-to-end test on a local chain (`server/test/autopay.integration.test.js`); not yet run on Whitechain Sepolia.
+- [ ] After redeploying the escrow: set `AUTOPAY_PRIVATE_KEY`, enable the agent in Payments, and run one merged-PR payout.
+
 ## Whitechain integration
 
 - [x] Chain 1874, RPC and explorer configured; designated USDT as the default token.
@@ -119,6 +127,21 @@ To deploy and test, follow [TESTING_AND_DEPLOYMENT.md](TESTING_AND_DEPLOYMENT.md
 - [ ] Verified contracts and explorer links for a real deposit and payout.
 - [x] Receipts and events synchronized with replay-safe indexing, recovery and reconciliation.
 - [~] Documentation: gas sponsorship, abuse controls, rationale, setup and limitations are in the README. `WHITECHAIN_FEEDBACK.md` still has TODOs that need the real deployment.
+
+## 0G track compliance (checked against the prize page 2026-11-06)
+
+Met in code: inference on 0G Private Computer in the main flow, request IDs in chat, PR reviews, GitHub comment and the 0G activity tab, the "what removing 0G breaks" statement, a judge demo at `/demo/0g`, and no generic-chat-wrapper behavior (replies are grounded in repo snapshots, criteria and diffs).
+
+Still missing for submission:
+
+- [ ] Live application URL and the demo-page link.
+- [ ] Demo video under 3 minutes (the shared 2:30 video fits).
+- [ ] Example request IDs copied from a real run into the README checklist.
+- [ ] Deployed contract addresses (blocked on the Whitechain deployment).
+- [ ] Team names and Telegram / X contacts.
+- [ ] Public repo hygiene: license and AI-use statement.
+- [ ] Optional iAI bonus (0G sign-in and a visibly decreasing credit balance): not built, deliberately deferred.
+- [ ] Risk: the track asks for a consumer app with daily return value; the demo should lead with the daily guide use, not only PR review.
 
 ## Delivery and acceptance
 
@@ -150,6 +173,6 @@ To deploy and test, follow [TESTING_AND_DEPLOYMENT.md](TESTING_AND_DEPLOYMENT.md
 - [ ] Multi-repository organizations and private repositories.
 - [ ] Arbitration or unilateral refunds after submitted work.
 - [ ] Outside-contributor payout onboarding, split rewards, reputation, multiple tokens or chains, scheduled digests.
-- [ ] Autonomous code changes, merges and payouts.
+- [ ] Autonomous code changes and merges. (The SRS also lists autonomous payouts as deferred; an opt-in, capped automatic payout was added later at the team's request, see "Automatic payout".)
 - [ ] Separate 0G Storage/Chain integration (Arkiv was removed from the architecture).
 - [ ] The Whitechain "Operate" extension (reusable business payment integration or separate demo app), which the SRS marks outside the core MVP.

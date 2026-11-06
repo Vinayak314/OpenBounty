@@ -519,6 +519,10 @@ async function bountyView(bounty, { project, uid, viewerAccount, includeReview =
       claimVersion: bounty.chain.claimVersion, refundReason: bounty.chain.refundReason || "", syncedAt: bounty.chain.syncedAt || null,
       funderUrl: explorerAddress(bounty.chain.funder) },
     limitation: LIMITATION,
+    autoPay: {
+      enabled: Boolean(bounty.autoPay?.enabled), state: bounty.autoPay?.state || "", reason: bounty.autoPay?.reason || "",
+      by: bounty.autoPay?.enabled ? bounty.autoPay.byName || "" : "", available: chain().config.autopayEnabled,
+    },
     viewer: {
       maintainer, claimant,
       canEdit: maintainer && status === "draft",
@@ -526,6 +530,7 @@ async function bountyView(bounty, { project, uid, viewerAccount, includeReview =
       canRequestClaim: !maintainer && status === "funded" && !mine && Boolean(viewerAccount) && lower(viewerAccount) !== lower(bounty.chain.funder),
       canSubmit: claimant && status === "claimed",
       canApprovePayout: maintainer && status === "submitted",
+      canToggleAutoPay: maintainer && ["funded", "claimed", "submitted"].includes(status) && chain().config.autopayEnabled,
       canRefund: (maintainer || (viewerAccount && lower(viewerAccount) === lower(bounty.chain.funder))) && status === "funded",
       canConsentCancel: claimant && ["claimed", "submitted"].includes(status) && !bounty.cancelConsent?.signature,
       canCancel: maintainer && ["claimed", "submitted"].includes(status) && Boolean(bounty.cancelConsent?.signature),

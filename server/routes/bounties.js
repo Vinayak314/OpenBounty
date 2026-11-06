@@ -6,6 +6,7 @@ const { requireFirebaseUser } = require("../middleware/requireFirebaseUser");
 const { findProjectAccess } = require("../services/projectAccess");
 const svc = require("../services/bounties/service");
 const permissions = require("../services/bounties/permissions");
+const autopay = require("../services/bounties/autopay");
 const { reconcile } = require("../services/chain/indexer");
 const aiOrchestrator = require("../services/ai/orchestrator");
 const { sendError } = require("./paymentErrors");
@@ -104,6 +105,10 @@ bounties.post("/:number/submission", handle("Could not register the submission."
 }));
 bounties.post("/:number/payout", intentRoute("Could not prepare the payout.",
   (req) => svc.preparePayout({ ...args(req), acknowledgeWarnings: req.body?.acknowledgeWarnings === true, reportHash: String(req.body?.reportHash || "") })));
+bounties.post("/:number/autopay", handle("Could not change automatic payout.", async (req, res) => {
+  if (typeof req.body?.enabled !== "boolean") return res.status(400).json({ error: "Say whether automatic payout should be on or off." });
+  await respond(req, res, await autopay.setAutoPay({ ...args(req), name: req.firebaseUser.name, enabled: req.body.enabled }));
+}));
 bounties.post("/:number/refund", intentRoute("Could not prepare the refund.", (req) => svc.prepareRefund(args(req))));
 bounties.post("/:number/cancel/consent", intentRoute("Could not prepare the consent.", (req) => svc.prepareCancelConsent(args(req))));
 bounties.post("/:number/cancel", intentRoute("Could not prepare the cancellation.", (req) => svc.prepareCancel(args(req))));
@@ -121,6 +126,9 @@ payments.post("/roles", intentRoute("Could not prepare the permission change.", 
   project: req.project, uid: req.firebaseUser.uid, targetUid: String(req.body?.uid || ""),
   maintainer: typeof req.body?.maintainer === "boolean" ? req.body.maintainer : undefined,
   settlement: typeof req.body?.settlement === "boolean" ? req.body.settlement : undefined,
+})));
+payments.post("/autopay-agent", intentRoute("Could not prepare the automatic payout change.", (req) => permissions.prepareAutoPayAgent({
+  project: req.project, uid: req.firebaseUser.uid, maxUsdt: req.body?.maxUsdt === null ? "" : req.body?.maxUsdt,
 })));
 payments.post("/ownership/accept", intentRoute("Could not prepare the ownership transfer.",
   (req) => permissions.prepareAcceptOwnership({ project: req.project, uid: req.firebaseUser.uid })));

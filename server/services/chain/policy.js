@@ -9,7 +9,7 @@ const factoryIface = new Interface(FACTORY_ABI);
 
 const ESCROW_FUNCTIONS = new Set([
   "fund", "acceptClaim", "expireClaim", "registerSubmission", "settle", "refund", "cancelByAgreement",
-  "setMaintainer", "setSettlementWallet", "acceptOwnership", "invalidateNonce",
+  "setMaintainer", "setSettlementWallet", "setAutoPayoutAgent", "acceptOwnership", "invalidateNonce",
 ]);
 
 class PolicyError extends Error {
@@ -45,13 +45,20 @@ function assertAllowedAccountCalls(calls, { escrow, token, maxAmount }) {
 }
 
 /** Validates a transaction the sponsor itself sends (outer call). */
-function assertAllowedSponsorTx({ to, data }, { escrow, factory, isAccount }) {
+function assertAllowedSponsorTx({ to, data }, { escrow, factory, isAccount, autopay }) {
   if (same(to, factory)) {
     if (factoryIface.parseTransaction({ data })?.name !== "createAccount") throw new PolicyError("Only account creation is sponsored.");
     return "createAccount";
   }
   if (same(to, escrow)) {
-    const name = escrowIface.parseTransaction({ data })?.name;
+    const parsed = escrowIface.parseTransaction({ data });
+    const name = parsed?.name;
+    // A direct `settle` is only the automatic payout: it must be approved by the configured auto-payout key.
+    // Every human-approved settle goes through the approver's passkey account instead.
+    if (name === "settle") {
+      if (!autopay || !same(parsed.args.approval.signer, autopay)) throw new PolicyError("Only automatic payouts approved by the payout agent are sent directly.");
+      return name;
+    }
     if (!["registerSubmission", "expireClaim"].includes(name)) throw new PolicyError("Only backend attestations are sent directly.");
     return name;
   }

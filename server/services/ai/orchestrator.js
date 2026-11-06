@@ -210,6 +210,8 @@ async function runReviewJob({ io, project, message, trigger, config }) {
     await publishReview(project, review);
     await recordJob(project, prNumber, { status: "complete", headSha: review.headSha, review: review._id, errorCode: "", error: "" });
     io?.to("project:" + project.id).emit("review:completed", { reviewId: review.id, prNumber: review.prNumber, verdict: review.verdict });
+    // A bounty that opted in to automatic payout is checked now: merged + current report recommending approval.
+    require("../bounties/autopay").onReviewComplete({ project, review });
   } catch (error) {
     if (!message && ["stale", "draft"].includes(error.code)) {
       await recordJob(project, prNumber, { status: "skipped", errorCode: error.code, error: error.message.slice(0, 400) });

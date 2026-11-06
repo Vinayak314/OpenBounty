@@ -39,6 +39,19 @@ const BountySchema = new mongoose.Schema({
     requestedAt: Date, txHash: String, error: { type: String, maxlength: 300 },
   },
   payout: { reviewId: { type: mongoose.Schema.Types.ObjectId, ref: "Review" }, reviewedSha: String, mergeSha: String, reportHash: String, approvedByUid: String },
+  // Opt-in, per bounty: a maintainer lets OpenBounty release the reward by itself once the PR is merged and the
+  // current 0G report recommends approval. `state` is the last automatic attempt, shown to maintainers.
+  autoPay: {
+    enabled: { type: Boolean, default: false },
+    byUid: { type: String, default: "" },
+    byName: { type: String, default: "", maxlength: 120 },
+    at: Date,
+    state: { type: String, enum: ["", "waiting", "processing", "paid", "blocked", "failed"], default: "" },
+    reason: { type: String, default: "", maxlength: 300 },
+    txHash: String,
+    attempts: { type: Number, default: 0 },
+    lastAttemptAt: Date,
+  },
   cancelConsent: { signer: String, nonce: String, deadline: Number, signature: String, claimVersion: Number, at: Date },
   chain: {
     bountyId: { type: String, required: true },
