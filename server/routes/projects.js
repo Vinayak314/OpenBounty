@@ -3,6 +3,8 @@ const mongoose = require("mongoose");
 const ChatMessage = require("../models/ChatMessage");
 const { requireFirebaseUser } = require("../middleware/requireFirebaseUser");
 const { findProjectAccess } = require("../services/projectAccess");
+const { messageResponse } = require("../services/chatSerializer");
+const aiOrchestrator = require("../services/ai/orchestrator");
 
 const router = express.Router();
 router.use(requireFirebaseUser);
@@ -24,30 +26,6 @@ async function accessibleProject(req, res) {
     return null;
   }
   return project;
-}
-
-function messageResponse(message, firebaseUid) {
-  const authorName = message.authorName || "GitHub user";
-  const initials = authorName.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "GH";
-  return {
-    id: message.id,
-    clientMessageId: message.clientMessageId,
-    authorUid: message.authorUid,
-    type: "message",
-    author: { name: authorName, initials, color: "orange", photoURL: message.authorPhoto },
-    me: message.authorUid === firebaseUid,
-    status: message.authorUid === firebaseUid ? "sent" : undefined,
-    time: new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }),
-    variant: message.authorUid === firebaseUid ? "outlined" : "filled",
-    body: message.body,
-    attachments: message.attachments,
-    replyTo: message.replyTo?.id ? message.replyTo : null,
-    edited: message.edited,
-    reactions: Object.fromEntries((message.reactions || []).map((reaction) => [reaction.emoji, {
-      count: reaction.users.length,
-      mine: firebaseUid ? reaction.users.includes(firebaseUid) : false,
-    }])),
-  };
 }
 
 function emitToProject(req, project, event, payload) {
@@ -72,12 +50,24 @@ router.get("/:slug", async (req, res) => {
   }
 });
 
+router.get("/:slug/ai/status", async (req, res) => {
+  if (!ensureDatabase(res)) return;
+  try {
+    const project = await accessibleProject(req, res);
+    if (!project) return;
+    res.json({ ai: aiOrchestrator.status(), commands: aiOrchestrator.COMMANDS });
+  } catch (error) {
+    console.error("Could not load AI status:", error.message);
+    res.status(500).json({ error: "Could not load AI status." });
+  }
+});
+
 router.get("/:slug/messages", async (req, res) => {
   if (!ensureDatabase(res)) return;
   try {
     const project = await accessibleProject(req, res);
     if (!project) return;
-    const messages = await ChatMessage.find({ project: project._id }).sort({ createdAt: -1, _id: -1 }).limit(500);
+    const messages = await ChatMessage.find({ project: project._id }).sort({ createdAt: -1, _id: -1 }).limit(500).populate("review");
     res.json({ messages: messages.reverse().map((message) => messageResponse(message, req.firebaseUser.uid)) });
   } catch (error) {
     console.error("Could not load project chat:", error.message);
@@ -121,6 +111,10 @@ router.post("/:slug/messages", async (req, res) => {
     });
     emitToProject(req, project, "chat:message-created", messageResponse(message));
     res.status(201).json({ message: messageResponse(message, req.firebaseUser.uid) });
+    // Fire-and-forget: inference never blocks or fails the user's own message.
+    aiOrchestrator.handleMessage({ io: req.app.get("io"), project, message }).catch((error) => {
+      console.error("AI orchestration failed:", error.message);
+    });
   } catch (error) {
     console.error("Could not send project message:", error.message);
     res.status(500).json({ error: "Could not send your message." });
@@ -172,7 +166,7 @@ router.patch("/:slug/messages/:messageId/reactions", async (req, res) => {
   try {
     const project = await accessibleProject(req, res);
     if (!project) return;
-    const message = await ChatMessage.findOne({ _id: req.params.messageId, project: project._id });
+    const message = await ChatMessage.findOne({ _id: req.params.messageId, project: project._id }).populate("review");
     if (!message) return res.status(404).json({ error: "Message not found." });
 
     let reaction = message.reactions.find((item) => item.emoji === emoji);

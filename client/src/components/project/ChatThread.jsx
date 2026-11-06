@@ -4,6 +4,7 @@ import {
 } from "lucide-react";
 import Avatar from "./Avatar";
 import EvidenceReport from "./EvidenceReport";
+import Markdown from "./Markdown";
 
 const EMOJIS = ["👍", "🎉", "👀", "❤️"];
 
@@ -165,12 +166,24 @@ function Message({ m, actions, onJump }) {
         {m.type === "report" ? (
           <div className="mt-[9px]"><EvidenceReport report={m.report} /></div>
         ) : (
-          <p
-            className={`mt-[9px] whitespace-pre-wrap break-words rounded-[14px] px-3 py-[11px] text-[12px] leading-5 text-ob-navy ${
-              m.me ? "bg-ob-mist" : m.variant === "outlined" ? "border border-ob-line" : "bg-white"
-            }`}
-          >
-            <Body text={m.body} />
+          m.author.agent ? (
+            <div className="mt-[9px] min-w-0 max-w-full break-words rounded-[14px] bg-white px-3 py-[11px] text-[12px] leading-5 text-ob-navy">
+              <Markdown text={m.body} />
+            </div>
+          ) : (
+            <p
+              className={`mt-[9px] whitespace-pre-wrap break-words rounded-[14px] px-3 py-[11px] text-[12px] leading-5 text-ob-navy ${
+                m.me ? "bg-ob-mist" : m.variant === "outlined" ? "border border-ob-line" : "bg-white"
+              }`}
+            >
+              <Body text={m.body} />
+            </p>
+          )
+        )}
+        {m.ai?.status === "ok" && m.ai.requestId && (
+          <p className="mt-[5px] text-[10px] text-ob-slate" title="Traceability only, not proof the answer is correct">
+            0G request <code className="font-mono">{m.ai.requestId}</code>{m.ai.model && <> · {m.ai.model}</>}
+            {m.ai.repoSha && <> · repo @ <code className="font-mono">{m.ai.repoSha.slice(0, 7)}</code>{m.ai.repoFiles?.length > 0 && <> · read {m.ai.repoFiles.join(", ")}</>}</>}
           </p>
         )}
         {m.attachments?.map((a, i) => {

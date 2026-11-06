@@ -21,6 +21,20 @@ const ChatMessageSchema = new mongoose.Schema({
     users: [{ type: String, required: true }],
   }],
   edited: { type: Boolean, default: false },
+  // Set on agent messages that carry a structured PR evidence report.
+  review: { type: mongoose.Schema.Types.ObjectId, ref: "Review", default: undefined },
+  // Set only on messages produced by the central AI agent (or its deterministic failure notices).
+  agent: {
+    role: { type: String, enum: ["guide", "scope", "reviewer"] },
+    status: { type: String, enum: ["ok", "error"] },
+    requestId: { type: String, default: "", maxlength: 200 },
+    model: { type: String, default: "", maxlength: 200 },
+    contextHash: { type: String, default: "", maxlength: 80 },
+    repoSha: { type: String, default: "", maxlength: 40 },
+    repoFiles: [{ type: String, maxlength: 300 }],
+    triggerMessage: { type: String, default: "", maxlength: 40 },
+    errorCode: { type: String, default: "", maxlength: 40 },
+  },
 }, { timestamps: true });
 
 ChatMessageSchema.index({ project: 1, createdAt: 1 });

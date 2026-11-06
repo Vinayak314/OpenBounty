@@ -6,7 +6,7 @@ import { COMMANDS } from "@/hooks/useChat";
 const EMOJIS = ["😀", "😂", "🙂", "😍", "🤔", "😅", "🙌", "👏", "👍", "👎", "🎉", "🔥", "✅", "❌", "👀", "🚀", "💡", "🐛", "❤️", "🙏", "💸", "📎", "⚠️", "✨"];
 const MAX_IMG = 400 * 1024;
 
-const MENTIONABLE = [];
+const MENTIONABLE = [{ id: "agent", name: "agent" }];
 
 const readDraft = (key) => {
   try {

@@ -7,8 +7,13 @@ const SOUND_KEY = "ob-chat-sound";
 const API_URL = import.meta.env.VITE_API_URL || undefined;
 const safe = (fn, fallback) => { try { return fn(); } catch { return fallback; } };
 
-// Slash command suggestions are intentionally empty until project commands are backed by APIs.
-export const COMMANDS = [];
+// Slash commands handled by the central AI agent (see server/services/ai/triggers.js).
+export const COMMANDS = [
+  { cmd: "/explain", hint: "Ask the agent to explain code, an issue or the project" },
+  { cmd: "/criteria", hint: "Ask the agent to draft acceptance criteria" },
+  { cmd: "/review", hint: "Review a pull request: /review 12" },
+  { cmd: "/setcriteria", hint: "Maintainers: approve criteria, one per line" },
+];
 
 function upsertMessage(current, message) {
   const index = current.findIndex((item) => item.id === message.id || (
@@ -160,6 +165,10 @@ export function useChat(projectSlug) {
             };
             return { ...message, reactions };
           }));
+        });
+        socket.on("agent:status", ({ working }) => {
+          setTyping(working ? "Bounty agent" : null);
+          if (working) window.setTimeout(() => setTyping((current) => current === "Bounty agent" ? null : current), 90000);
         });
         socket.on("chat:typing", ({ uid, name, isTyping }) => {
           if (uid === auth.currentUser?.uid) return;
