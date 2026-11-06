@@ -9,12 +9,18 @@ const permissions = require("../services/bounties/permissions");
 const { reconcile } = require("../services/chain/indexer");
 const aiOrchestrator = require("../services/ai/orchestrator");
 const { sendError } = require("./paymentErrors");
+const { limitRequests } = require("../services/rateLimit");
+
+const readLimit = limitRequests({ windowMs: 60000, limit: 120 });
+const actionLimit = limitRequests({ windowMs: 60000, limit: 30 });
+const resyncLimit = limitRequests({ windowMs: 60000, limit: 10 });
 
 // Mounted at /api/projects/:slug/bounties and /api/projects/:slug/payments.
 const bounties = express.Router({ mergeParams: true });
 const payments = express.Router({ mergeParams: true });
 for (const router of [bounties, payments]) {
   router.use(requireFirebaseUser);
+  router.use((req, res, next) => (req.method === "GET" ? readLimit : actionLimit)(req, res, next));
   router.use(async (req, res, next) => {
     if (mongoose.connection.readyState !== 1) return res.status(503).json({ error: "The database is not connected." });
     try {
@@ -97,12 +103,12 @@ bounties.post("/:number/submission", handle("Could not register the submission."
   res.json(result);
 }));
 bounties.post("/:number/payout", intentRoute("Could not prepare the payout.",
-  (req) => svc.preparePayout({ ...args(req), acknowledgeWarnings: req.body?.acknowledgeWarnings === true })));
+  (req) => svc.preparePayout({ ...args(req), acknowledgeWarnings: req.body?.acknowledgeWarnings === true, reportHash: String(req.body?.reportHash || "") })));
 bounties.post("/:number/refund", intentRoute("Could not prepare the refund.", (req) => svc.prepareRefund(args(req))));
 bounties.post("/:number/cancel/consent", intentRoute("Could not prepare the consent.", (req) => svc.prepareCancelConsent(args(req))));
 bounties.post("/:number/cancel", intentRoute("Could not prepare the cancellation.", (req) => svc.prepareCancel(args(req))));
 bounties.post("/:number/expire", handle("Could not release the claim.", async (req, res) => res.json(await svc.expireClaim(args(req)))));
-bounties.post("/:number/resync", handle("Could not sync with the escrow.", async (req, res) => {
+bounties.post("/:number/resync", resyncLimit, handle("Could not sync with the escrow.", async (req, res) => {
   const bounty = await svc.findBounty(req.project, req.params.number);
   await reconcile(bounty);
   await respond(req, res, await svc.findBounty(req.project, req.params.number));

@@ -5,6 +5,7 @@ const mongoose = require("mongoose");
 // indexer from verified receipts and contract reads, never from client input.
 const party = {
   uid: { type: String, default: "" },
+  githubId: { type: String, default: "" },
   name: { type: String, default: "", maxlength: 120 },
   githubLogin: { type: String, default: "", maxlength: 39 },
   account: { type: String, default: "" },
@@ -53,6 +54,7 @@ const BountySchema = new mongoose.Schema({
     submissionTx: String,
     payoutTx: String,
     refundTx: String,
+    termsMismatch: { type: Boolean, default: false },
     refundReason: String,
     payoutApprovedBy: String,
     payoutAttestedBy: String,
@@ -64,6 +66,7 @@ const BountySchema = new mongoose.Schema({
 
 BountySchema.index({ project: 1, number: 1 }, { unique: true });
 BountySchema.index({ "chain.bountyId": 1 }, { unique: true });
-BountySchema.index({ project: 1, "submission.prNumber": 1 });
+// One pull request can back at most one bounty (set only while a submission is registered or pending).
+BountySchema.index({ project: 1, "submission.prNumber": 1 }, { unique: true, partialFilterExpression: { "submission.prNumber": { $type: "number" } } });
 
 module.exports = mongoose.models.Bounty || mongoose.model("Bounty", BountySchema);

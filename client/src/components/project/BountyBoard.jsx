@@ -17,7 +17,14 @@ const STATUS = {
 };
 
 const isoDate = (date) => new Date(date).toLocaleString();
-const defaultDeadline = () => new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 16);
+// <input type="datetime-local"> holds LOCAL time. Converting through toISOString() shifted it by the timezone
+// offset on every save, so format and parse it in local time instead.
+const pad = (value) => String(value).padStart(2, "0");
+const toLocalInput = (date) => {
+  const d = new Date(date);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+const defaultDeadline = () => toLocalInput(Date.now() + 7 * 86400000);
 
 export default function BountyBoard({ slug, canMaintain }) {
   const base = `/projects/${encodeURIComponent(slug)}/bounties`;
@@ -28,23 +35,19 @@ export default function BountyBoard({ slug, canMaintain }) {
   const [creating, setCreating] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
-  const load = useCallback(async (signal) => {
-    try {
-      const result = await apiRequest(base, { signal });
-      setBounties(result.bounties);
-      setLimitation(result.limitation);
-      setError("");
-    } catch (loadError) {
-      if (!signal?.aborted) setError(loadError.message);
-    }
-  }, [base]);
-
   useEffect(() => {
     const controller = new AbortController();
-    load(controller.signal);
-    const timer = setInterval(() => load(controller.signal), 8000);
+    const run = () => apiRequest(base, { signal: controller.signal })
+      .then((result) => {
+        setBounties(result.bounties);
+        setLimitation(result.limitation);
+        setError("");
+      })
+      .catch((loadError) => { if (!controller.signal.aborted) setError(loadError.message); });
+    run();
+    const timer = setInterval(run, 8000);
     return () => { controller.abort(); clearInterval(timer); };
-  }, [load, refreshKey]);
+  }, [base, refreshKey]);
 
   const refresh = () => setRefreshKey((value) => value + 1);
   const selected = bounties.find((bounty) => bounty.number === open);
@@ -120,7 +123,7 @@ function BountyForm({ slug, base, onClose, onSaved, initial }) {
       const body = {
         title: form.title, description: form.description, amount: form.amount,
         issueNumber: form.issueNumber ? Number(form.issueNumber) : null,
-        submissionDeadline: new Date(form.submissionDeadline).toISOString(),
+        submissionDeadline: new Date(form.submissionDeadline).toISOString(), // parsed as local time, sent as UTC
         criteria: form.criteria.split("\n").map((line) => line.replace(/^\s*(?:[-*•]|\d{1,2}[.)])\s*/, "").trim()).filter(Boolean),
       };
       const { bounty } = initial?.number
@@ -183,9 +186,16 @@ function BountyDetail({ base, slug, summary, limitation, onChanged }) {
     }
   }, [path]);
 
-  useEffect(() => { load(); }, [load, summary.status, summary.claimRequests?.length]);
+  useEffect(() => { load(); }, [load, summary.status, summary.claimRequests?.length, summary.submission?.prNumber, summary.receipts?.length]);
+  // A new report means any earlier acknowledgement of warnings no longer applies.
+  useEffect(() => { setAcknowledge(false); }, [bounty?.review?.reportHash]);
 
-  const done = () => { load(); onChanged(); };
+  // Keep the explorer link visible: the button that produced it disappears once the bounty moves on.
+  const done = (outcome) => {
+    if (outcome?.explorer) setNotice(`Confirmed on chain. Receipt: ${outcome.explorer}`);
+    load();
+    onChanged();
+  };
   async function plain(key, request, success) {
     setBusy(key);
     setError("");
@@ -194,6 +204,7 @@ function BountyDetail({ base, slug, summary, limitation, onChanged }) {
       const result = await request();
       if (result?.bounty) setBounty(result.bounty);
       if (success) setNotice(typeof success === "function" ? success(result) : success);
+      await load();
       onChanged();
     } catch (requestError) {
       setError(requestError.message);
@@ -207,7 +218,7 @@ function BountyDetail({ base, slug, summary, limitation, onChanged }) {
   if (editing) {
     return <div className="border-t border-ob-line p-3"><BountyForm slug={slug} base={base} initial={{
       number: bounty.number, title: bounty.title, description: bounty.description, issueNumber: bounty.issue?.number ? String(bounty.issue.number) : "",
-      amount: bounty.amountDisplay, submissionDeadline: new Date(bounty.submissionDeadline).toISOString().slice(0, 16),
+      amount: bounty.amountDisplay, submissionDeadline: toLocalInput(bounty.submissionDeadline),
       criteria: bounty.criteria.map((c) => c.text).join("\n"),
     }} onClose={() => setEditing(false)} onSaved={() => { setEditing(false); done(); }} /></div>;
   }
@@ -295,10 +306,10 @@ function BountyDetail({ base, slug, summary, limitation, onChanged }) {
           <p className="text-xs font-semibold">Approve payout</p>
           <p className="text-[11px] text-ob-slate">OpenBounty re-checks GitHub (merged PR by the claimant, unchanged head), requires a current 0G report for these criteria, then binds the reviewed commit, merge commit and report hash into the payment. The AI assessment is advisory; you decide.</p>
           {bounty.review && bounty.review.verdict !== "ready_for_approval" && (
-            <label className="flex items-start gap-2 text-[11px]"><input type="checkbox" checked={acknowledge} onChange={(event) => setAcknowledge(event.target.checked)} />I reviewed the evidence and approve despite the report saying "{bounty.review.status}".</label>
+            <label className="flex items-start gap-2 text-[11px]"><input type="checkbox" checked={acknowledge} onChange={(event) => setAcknowledge(event.target.checked)} />I reviewed the evidence and approve despite the report saying &ldquo;{bounty.review.status}&rdquo;.</label>
           )}
           <PasskeyAction label={`Pay ${bounty.amountDisplay} USDT to ${bounty.claimant?.name || "claimant"}`}
-            prepare={() => apiRequest(`${path}/payout`, { method: "POST", body: { acknowledgeWarnings: acknowledge } })} onDone={done} />
+            prepare={() => apiRequest(`${path}/payout`, { method: "POST", body: { acknowledgeWarnings: acknowledge, reportHash: bounty.review?.reportHash || "" } })} onDone={done} />
         </div>
       )}
 

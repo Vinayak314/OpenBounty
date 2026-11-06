@@ -6,6 +6,8 @@ const UserSchema = new mongoose.Schema({
   displayName: { type: String, default: "" },
   photoURL: { type: String, default: "" },
   github: {
+    // Numeric GitHub account id from the signed Firebase token. Identity is bound to this, never to a typed name.
+    id: { type: String, default: "" },
     username: { type: String, default: "" },
     profileUrl: { type: String, default: "" },
     avatarUrl: { type: String, default: "" },
@@ -34,6 +36,7 @@ const UserSchema = new mongoose.Schema({
   ownedProjects: [{ type: mongoose.Schema.Types.ObjectId, ref: "Project" }],
 }, { timestamps: true });
 
+UserSchema.index({ "github.id": 1 }, { unique: true, partialFilterExpression: { "github.id": { $type: "string", $gt: "" } } });
 UserSchema.index({ "wallet.address": 1 }, { unique: true, partialFilterExpression: { "wallet.address": { $type: "string", $gt: "" } } });
 
 module.exports = mongoose.models.User || mongoose.model("User", UserSchema);

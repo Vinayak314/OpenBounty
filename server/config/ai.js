@@ -19,6 +19,9 @@ function getAiConfig(env = process.env) {
     // Bounded context package limits.
     maxHistoryMessages: int(env.AI_MAX_HISTORY_MESSAGES, 12),
     maxContextChars: int(env.AI_MAX_CONTEXT_CHARS, 24000),
+    // Hard bound on a whole review prompt (criteria, PR text, issues and diff together).
+    maxPromptChars: int(env.AI_MAX_PROMPT_CHARS, 60000),
+    autoReviewsPerHour: int(env.AI_AUTO_REVIEWS_PER_HOUR, 20),
     // Per-user and per-project rate limits (sliding window, 1 minute).
     userRequestsPerMinute: int(env.AI_USER_RPM, 4),
     projectRequestsPerMinute: int(env.AI_PROJECT_RPM, 12),

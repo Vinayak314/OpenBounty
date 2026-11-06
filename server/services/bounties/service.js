@@ -13,7 +13,7 @@ const { fetchPullRequestHead, fetchIssue } = require("../github");
 const { isProjectMaintainer } = require("../projectAccess");
 const { normalizeTexts, criteriaError } = require("../criteria");
 const { reportView } = require("../chatSerializer");
-const { postWorkflowNotice, emitBounty } = require("./notify");
+const { postWorkflowNotice, emitBounty, plainText } = require("./notify");
 
 const escrowIface = new Interface(ESCROW_ABI);
 const erc20Iface = new Interface(ERC20_ABI);
@@ -41,6 +41,7 @@ async function loadUser(uid) {
 }
 
 async function findBounty(project, number) {
+  if (!/^\d{1,9}$/.test(String(number))) throw new BountyError("Invalid bounty number.", 400, "bad_number");
   const bounty = await Bounty.findOne({ project: project._id, number: Number(number) });
   if (!bounty) throw new BountyError("Bounty not found.", 404, "not_found");
   return bounty;
@@ -51,15 +52,23 @@ async function findBounty(project, number) {
 function validateDraft(input, { partial = false } = {}) {
   const out = {};
   if (!partial || input.title !== undefined) {
-    out.title = String(input.title || "").trim().slice(0, 200);
+    if (typeof input.title !== "string") throw new BountyError("Give the bounty a title.");
+    out.title = input.title.replace(/\s+/g, " ").trim();
     if (!out.title) throw new BountyError("Give the bounty a title.");
+    if (out.title.length > 200) throw new BountyError("Keep the title under 200 characters.");
   }
-  if (input.description !== undefined) out.description = String(input.description || "").slice(0, 4000);
+  if (input.description !== undefined) {
+    if (input.description !== null && typeof input.description !== "string") throw new BountyError("The description must be text.");
+    out.description = String(input.description || "");
+    if (out.description.length > 4000) throw new BountyError("Keep the description under 4000 characters.");
+  }
   if (!partial || input.amount !== undefined) {
+    if (typeof input.amount !== "string" && typeof input.amount !== "number") throw new BountyError("Enter the reward in USDT.");
     try { out.amount = enc.parseUsdt(input.amount).toString(); } catch (error) { throw new BountyError(error.message); }
     if (BigInt(out.amount) > chain().config.sponsor.maxBountyUnits) throw new BountyError("That reward is above this server's limit.");
   }
   if (!partial || input.submissionDeadline !== undefined) {
+    if (typeof input.submissionDeadline !== "string" && typeof input.submissionDeadline !== "number") throw new BountyError("Choose a submission deadline.");
     const deadline = new Date(input.submissionDeadline);
     if (Number.isNaN(deadline.getTime())) throw new BountyError("Choose a submission deadline.");
     if (deadline.getTime() < Date.now() + 24 * HOUR * 1000) throw new BountyError("The submission deadline must be at least a day away.");
@@ -67,6 +76,9 @@ function validateDraft(input, { partial = false } = {}) {
     out.submissionDeadline = deadline;
   }
   if (!partial || input.criteria !== undefined) {
+    if (!Array.isArray(input.criteria) || input.criteria.some((item) => typeof item !== "string")) {
+      throw new BountyError("Criteria must be a list of text items.");
+    }
     const texts = normalizeTexts(input.criteria);
     const error = criteriaError(texts);
     if (error) throw new BountyError(error);
@@ -154,44 +166,55 @@ async function prepareFund({ project, uid, number }) {
   requireMaintainer(project, uid);
   const user = await loadUser(uid);
   const wallet = passkeyOf(user);
-  const bounty = await findBounty(project, number);
-  if (!["draft", "funding"].includes(bounty.status)) throw new BountyError("This bounty is already funded.", 409);
-  if (bounty.submissionDeadline.getTime() < Date.now() + 2 * HOUR * 1000) throw new BountyError("Move the submission deadline later before funding.");
-  if (lower(bounty.token) !== lower(config.token)) throw new BountyError("The reward token is not the configured USDT.");
-  const [isMaintainer, balance] = await Promise.all([escrow.hasMaintainerRole(wallet.address), token.balanceOf(wallet.address)]);
-  if (!isMaintainer) throw new BountyError("Your payment account is not an escrow maintainer yet. The project owner grants it under Payment permissions.", 409, "not_maintainer");
-  if (balance < BigInt(bounty.amount)) {
-    throw new BountyError(`Your payment account holds ${enc.formatUsdt(balance)} USDT; this bounty needs ${enc.formatUsdt(bounty.amount)}. Send test USDT to ${getAddress(wallet.address)}.`, 409, "insufficient_balance");
+  const existing = await findBounty(project, number);
+  if (!["draft", "funding"].includes(existing.status)) throw new BountyError("This bounty is already funded.", 409);
+  // Lock the terms first (atomically), then build everything from the locked document, so an edit can never
+  // slip in between reading the terms and signing them.
+  const bounty = await Bounty.findOneAndUpdate(
+    { _id: existing._id, status: { $in: ["draft", "funding"] }, "chain.termsMismatch": { $ne: true } },
+    { $set: { status: "funding" } }, { returnDocument: "after" });
+  if (!bounty) throw new BountyError("This bounty can no longer be funded. Its on-chain terms may differ from the draft; contact the project owner.", 409);
+  try {
+    if (bounty.submissionDeadline.getTime() < Date.now() + 2 * HOUR * 1000) throw new BountyError("Move the submission deadline later before funding.");
+    if (lower(bounty.token) !== lower(config.token)) throw new BountyError("The reward token is not the configured USDT.");
+    const [isMaintainer, balance] = await Promise.all([escrow.hasMaintainerRole(wallet.address), token.balanceOf(wallet.address)]);
+    if (!isMaintainer) throw new BountyError("Your payment account is not an escrow maintainer yet. The project owner grants it under Payment permissions.", 409, "not_maintainer");
+    if (balance < BigInt(bounty.amount)) {
+      throw new BountyError(`Your payment account holds ${enc.formatUsdt(balance)} USDT; this bounty needs ${enc.formatUsdt(bounty.amount)}. Send test USDT to ${getAddress(wallet.address)}.`, 409, "insufficient_balance");
+    }
+    const terms = termsOf(bounty);
+    return await createExecuteIntent({
+      user, kind: "fund", project: project._id, bounty: bounty._id,
+      calls: [call(config.token, erc20Iface, "approve", [config.escrow, terms.amount]), call(config.escrow, escrowIface, "fund", [terms])],
+      summary: `Lock ${enc.formatUsdt(bounty.amount)} USDT in escrow for bounty #${bounty.number}. Network fees are sponsored.`,
+    });
+  } catch (error) {
+    // Nothing was signed: reopen the draft for editing (a pending earlier intent keeps it locked).
+    if (existing.status === "draft") await Bounty.updateOne({ _id: bounty._id, status: "funding" }, { $set: { status: "draft" } });
+    throw error;
   }
-  // Lock the terms while the signature is pending; the indexer or reconcile moves it on.
-  await Bounty.updateOne({ _id: bounty._id, status: { $in: ["draft", "funding"] } }, { $set: { status: "funding" } });
-  const terms = termsOf(bounty);
-  return createExecuteIntent({
-    user, kind: "fund", project: project._id, bounty: bounty._id,
-    calls: [call(config.token, erc20Iface, "approve", [config.escrow, terms.amount]), call(config.escrow, escrowIface, "fund", [terms])],
-    summary: `Lock ${enc.formatUsdt(bounty.amount)} USDT in escrow for bounty #${bounty.number}. Network fees are sponsored.`,
-  });
 }
 
 // ---------- Claims ----------
 
 async function requestClaim({ project, uid, number, message }) {
+  if (isProjectMaintainer(project, uid)) throw new BountyError("Project maintainers cannot claim bounties they manage.", 403, "maintainer_claim");
   const user = await loadUser(uid);
   const wallet = passkeyOf(user);
   const bounty = await findBounty(project, number);
   if (bounty.status !== "funded") throw new BountyError("Only funded, unclaimed bounties accept claim requests.", 409);
-  if (!user.github?.username) throw new BountyError("Connect your GitHub profile first so your PR can be matched to you.", 409);
+  if (!user.github?.username || !user.github.id) throw new BountyError("Verify your GitHub account first (sign in with GitHub) so your PR can be matched to you.", 409);
   if (lower(bounty.chain.funder) === lower(wallet.address) || bounty.createdBy?.uid === uid) {
     throw new BountyError("You funded this bounty, so you cannot claim its reward.", 409, "self_payment");
   }
   if (bounty.submissionDeadline < new Date()) throw new BountyError("The submission deadline has passed.", 409);
-  const entry = { uid, name: user.displayName || user.github.username, githubLogin: user.github.username, account: wallet.address,
+  const entry = { uid, githubId: user.github.id, name: user.displayName || user.github.username, githubLogin: user.github.username, account: wallet.address,
     message: String(message || "").slice(0, 1000), status: "pending", at: new Date() };
   const updated = await Bounty.findOneAndUpdate(
     { _id: bounty._id, status: "funded", claimRequests: { $not: { $elemMatch: { uid, status: "pending" } } } },
     { $push: { claimRequests: entry } }, { returnDocument: "after" });
   if (!updated) throw new BountyError("You already have a pending request for this bounty.", 409);
-  await postWorkflowNotice(project._id, `**Claim request:** ${entry.name} (@${entry.githubLogin}) asked to work on bounty #${bounty.number} "${bounty.title}". A maintainer can accept it from the bounty board.`);
+  await postWorkflowNotice(project._id, `**Claim request:** ${plainText(entry.name)} (@${plainText(entry.githubLogin, 39)}) asked to work on bounty #${bounty.number} "${plainText(bounty.title)}". A maintainer can accept it from the bounty board.`);
   emitBounty(project._id, bounty.number);
   return updated;
 }
@@ -218,7 +241,7 @@ async function prepareAccept({ project, uid, number, requestId }) {
   const wallet = passkeyOf(user);
   const bounty = await findBounty(project, number);
   const state = await reconcile(bounty);
-  if (state.status !== "funded") throw new BountyError("The bounty must be funded and unclaimed to accept a claim.", 409);
+  if (state.status !== "funded" || state.mismatch || bounty.chain.termsMismatch) throw new BountyError("The bounty must be funded and unclaimed to accept a claim.", 409);
   const request = bounty.claimRequests.id(requestId);
   if (!request || request.status !== "pending") throw new BountyError("That claim request is no longer pending.", 409);
   const claimant = await User.findOne({ firebaseUid: request.uid });
@@ -252,8 +275,15 @@ async function submitPullRequest({ project, uid, number, prNumber, io, queueRevi
   const pr = await fetchPullRequestHead(repo, n).catch(() => null);
   if (!pr) throw new BountyError(`PR #${n} was not found in ${repo}.`, 404);
   if (lower(pr.baseRepo) !== lower(repo)) throw new BountyError("The PR must target this project's repository.");
-  if (lower(pr.author) !== lower(bounty.claimant.githubLogin)) throw new BountyError(`PR #${n} was opened by @${pr.author}, not by the claimant @${bounty.claimant.githubLogin}.`, 403);
+  const sameAuthor = bounty.claimant.githubId
+    ? String(pr.authorId) === String(bounty.claimant.githubId)
+    : lower(pr.author) === lower(bounty.claimant.githubLogin);
+  if (!sameAuthor) throw new BountyError(`PR #${n} was opened by @${plainText(pr.author, 39)}, not by the claimant @${plainText(bounty.claimant.githubLogin, 39)}.`, 403);
   if (pr.state === "closed") throw new BountyError("That PR is closed without being merged.", 409);
+  if (pr.draft) throw new BountyError("Mark the PR ready for review before submitting it. Draft PRs cannot be registered.", 409, "draft_pr");
+  if (await Bounty.exists({ project: project._id, _id: { $ne: bounty._id }, "submission.prNumber": n })) {
+    throw new BountyError(`PR #${n} is already registered for another bounty. One PR can back only one bounty.`, 409, "pr_in_use");
+  }
   if (!/^[0-9a-f]{40}$/i.test(pr.headSha || "")) throw new BountyError("Could not read the PR head commit.", 502);
 
   const onchain = state.onchain;
@@ -262,7 +292,13 @@ async function submitPullRequest({ project, uid, number, prNumber, io, queueRevi
     signer: attester, chainId: config.chainId, escrow: config.escrow, type: "SubmissionAttestation",
     value: { bountyId: bounty.chain.bountyId, claimVersion: Number(onchain.claimVersion), recipient: onchain.recipient, submissionRef },
   });
-  await Bounty.updateOne({ _id: bounty._id }, { $set: { submission: { prNumber: n, prUrl: pr.url, headSha: pr.headSha, ref: submissionRef, requestedAt: new Date() } } });
+  // The unique PR index makes this write the atomic claim on the PR number (a race loses with a conflict).
+  try {
+    await Bounty.updateOne({ _id: bounty._id, status: "claimed" }, { $set: { submission: { prNumber: n, prUrl: pr.url, headSha: pr.headSha, ref: submissionRef, requestedAt: new Date() } } });
+  } catch (error) {
+    if (error.code === 11000) throw new BountyError(`PR #${n} is already registered for another bounty.`, 409, "pr_in_use");
+    throw error;
+  }
   let receipt;
   try {
     receipt = await sendSponsored({
@@ -270,7 +306,11 @@ async function submitPullRequest({ project, uid, number, prNumber, io, queueRevi
       data: escrowIface.encodeFunctionData("registerSubmission", [bounty.chain.bountyId, Number(onchain.claimVersion), submissionRef, attestation]),
     });
   } catch (error) {
-    await Bounty.updateOne({ _id: bounty._id }, { $set: { "submission.error": String(error.message).slice(0, 300) } });
+    // A pending confirmation may still land; only a failure that left the bounty unsubmitted releases the PR.
+    if (error.code !== "pending") {
+      const after = await reconcile(await Bounty.findById(bounty._id)).catch(() => null);
+      if (after?.status !== "submitted") await Bounty.updateOne({ _id: bounty._id, status: { $ne: "submitted" } }, { $unset: { submission: 1 } });
+    }
     throw error;
   }
   await processReceipt(receipt);
@@ -301,10 +341,16 @@ async function settlementFacts(project, bounty) {
     throw new BountyError("The escrow agreement does not match the stored terms. Payment is blocked.", 409, "terms_mismatch");
   }
   const { prNumber, review } = await currentEvidence(project, bounty);
+  // The PR we will pay for must be the one the backend attested on chain at submission time.
+  const expectedRef = enc.submissionRefFor(project.githubRepository.fullName, prNumber, bounty.submission.headSha);
+  if (lower(onchain.submissionRef) !== lower(expectedRef)) {
+    throw new BountyError("The pull request on file does not match the submission registered on chain. Payment is blocked.", 409, "submission_mismatch");
+  }
   if (!review || !review.requestId || !review.reportHash) throw new BountyError("A current 0G evidence report is required before payout. Run a review of the PR.", 409, "no_review");
   if (review.criteriaHash !== bounty.criteria.hash) throw new BountyError("The latest report was made against other criteria. Run a fresh review.", 409, "stale_review");
   const pr = await fetchPullRequestHead(project.githubRepository.fullName, prNumber);
-  if (lower(pr.author) !== lower(bounty.claimant.githubLogin)) throw new BountyError("The PR author no longer matches the claimant.", 409);
+  const stillClaimant = bounty.claimant.githubId ? String(pr.authorId) === String(bounty.claimant.githubId) : lower(pr.author) === lower(bounty.claimant.githubLogin);
+  if (!stillClaimant) throw new BountyError("The PR author no longer matches the claimant.", 409);
   if (pr.state !== "merged" || !/^[0-9a-f]{40}$/i.test(pr.mergeCommitSha || "")) throw new BountyError("Merge the PR on GitHub before approving the payout.", 409, "not_merged");
   if (pr.headSha !== review.headSha) {
     await Review.updateOne({ _id: review._id }, { $set: { status: "stale" } });
@@ -321,7 +367,7 @@ async function settlementFacts(project, bounty) {
   };
 }
 
-async function preparePayout({ project, uid, number, acknowledgeWarnings }) {
+async function preparePayout({ project, uid, number, acknowledgeWarnings, reportHash }) {
   const { config, escrow, attester } = requirePayments();
   requireMaintainer(project, uid);
   const user = await loadUser(uid);
@@ -332,6 +378,10 @@ async function preparePayout({ project, uid, number, acknowledgeWarnings }) {
   }
   if (lower(wallet.address) === lower(bounty.chain.recipient)) throw new BountyError("You cannot approve a payout to yourself.", 409, "self_payment");
   const { review, pr, settlement } = await settlementFacts(project, bounty);
+  // An acknowledgement only covers the exact report the maintainer was looking at.
+  if (acknowledgeWarnings && reportHash !== review.reportHash) {
+    throw new BountyError("The 0G report changed while you were reviewing it. Reload and check it again before approving.", 409, "report_changed");
+  }
   if (review.verdict !== "ready_for_approval" && !acknowledgeWarnings) {
     throw new BountyError(`The 0G report says "${review.verdict.replaceAll("_", " ")}". Confirm you reviewed the evidence to approve anyway.`, 409, "needs_acknowledgement");
   }
@@ -424,13 +474,13 @@ async function prepareCancel({ project, uid, number }) {
   });
 }
 
-async function expireClaim({ project, number }) {
+async function expireClaim({ project, number, uid }) {
   const { config } = requirePayments();
   const bounty = await findBounty(project, number);
   if (bounty.status !== "claimed" || !bounty.chain.claimExpiry || bounty.chain.claimExpiry > new Date()) {
     throw new BountyError("This claim has not expired.", 409);
   }
-  const receipt = await sendSponsored({ kind: "expire_claim", to: config.escrow, bounty: bounty._id,
+  const receipt = await sendSponsored({ userUid: uid, kind: "expire_claim", to: config.escrow, bounty: bounty._id,
     data: escrowIface.encodeFunctionData("expireClaim", [bounty.chain.bountyId]) });
   await processReceipt(receipt);
   return { txHash: receipt.hash };

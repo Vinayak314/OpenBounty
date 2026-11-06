@@ -7,6 +7,17 @@ const int = (value, fallback) => {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 };
 const address = (value) => (value && isAddress(value.trim()) ? getAddress(value.trim()) : "");
+// BigInt("0.5") throws; a bad value must fall back instead of crashing every payments route.
+const big = (value, fallback) => {
+  const text = String(value ?? "").trim();
+  if (!text) return BigInt(fallback); // BigInt("") is 0n, which would silently zero a limit
+  try {
+    const parsed = BigInt(text);
+    return parsed >= 0n ? parsed : BigInt(fallback);
+  } catch {
+    return BigInt(fallback);
+  }
+};
 const list = (value) => String(value || "").split(",").map((item) => item.trim()).filter(Boolean);
 
 function getChainConfig(env = process.env) {
@@ -24,6 +35,8 @@ function getChainConfig(env = process.env) {
     sponsorKey: env.SPONSOR_PRIVATE_KEY || "",
     attestationKey: env.ATTESTATION_PRIVATE_KEY || "",
     indexerStartBlock: int(env.ESCROW_DEPLOY_BLOCK, 0),
+    // Blocks to stay behind the head before indexing (shallow reorg protection).
+    indexerConfirmations: Math.min(int(env.INDEXER_CONFIRMATIONS, 2), 64),
     indexerPollMs: Math.max(int(env.INDEXER_POLL_MS, 15000), 2000),
     indexerBatchBlocks: Math.min(Math.max(int(env.INDEXER_BATCH_BLOCKS, 5000), 100), 50000),
     // Passkeys are bound to the site's domain.
@@ -36,9 +49,9 @@ function getChainConfig(env = process.env) {
       userTxPerDay: int(env.SPONSOR_USER_TX_PER_DAY, 40),
       globalTxPerHour: int(env.SPONSOR_GLOBAL_TX_PER_HOUR, 200),
       maxGasPerTx: int(env.SPONSOR_MAX_GAS_PER_TX, 2500000),
-      dailyBudgetWei: BigInt(env.SPONSOR_DAILY_BUDGET_WEI || "500000000000000000"), // 0.5 WBT
-      minBalanceWei: BigInt(env.SPONSOR_MIN_BALANCE_WEI || "20000000000000000"), // 0.02 WBT
-      maxBountyUnits: BigInt(env.SPONSOR_MAX_BOUNTY_UNITS || "10000000000"), // 10,000 USDT
+      dailyBudgetWei: big(env.SPONSOR_DAILY_BUDGET_WEI, "500000000000000000"), // 0.5 WBT
+      minBalanceWei: big(env.SPONSOR_MIN_BALANCE_WEI, "20000000000000000"), // 0.02 WBT
+      maxBountyUnits: big(env.SPONSOR_MAX_BOUNTY_UNITS, "10000000000"), // 10,000 USDT
     },
   };
   config.enabled = env.PAYMENTS_ENABLED !== "false" && Boolean(config.escrow && config.accountFactory && config.sponsorKey && config.attestationKey);

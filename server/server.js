@@ -21,6 +21,11 @@ const io = new SocketIOServer(httpServer, {
 });
 
 app.set("io", io);
+// Behind a reverse proxy, set TRUST_PROXY (for example to 1) so per-visitor limits see the real client address.
+if (process.env.TRUST_PROXY) {
+  const hops = Number(process.env.TRUST_PROXY);
+  app.set("trust proxy", Number.isInteger(hops) ? hops : process.env.TRUST_PROXY);
+}
 
 io.use(async (socket, next) => {
   const token = socket.handshake.auth?.token;
@@ -110,6 +115,7 @@ async function start() {
   httpServer.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
   // Payments: workflow notices go to project chats; the indexer mirrors escrow events into MongoDB.
   require("./services/bounties/notify").setIo(io);
+  await require("./services/ai/orchestrator").recoverJobs();
   try {
     const { getChainConfig } = require("./config/chain");
     const config = getChainConfig();

@@ -91,6 +91,7 @@ router.get("/:slug/reviews", async (req, res) => {
       jobs: jobs.map((job) => ({
         prNumber: job.prNumber, status: job.status, source: job.source, headSha: job.headSha,
         errorCode: job.errorCode, error: job.error, attempts: job.attempts, updatedAt: job.updatedAt,
+        stuck: ["queued", "running"].includes(job.status) && Date.now() - new Date(job.updatedAt).getTime() > 5 * 60000,
         reviewId: job.review ? String(job.review) : "",
       })),
       canApprove: project.status === "active" && isProjectMaintainer(project, req.firebaseUser.uid),
@@ -139,7 +140,7 @@ router.post("/:slug/reviews/:reviewId/approve", async (req, res) => {
     res.json({ review: reportView(approved, project.criteria) });
   } catch (error) {
     console.error("Could not approve review:", error.message);
-    res.status(error.code === "rate_limited" ? 503 : 500).json({ error: "Could not verify the GitHub PR for approval. Try again." });
+    res.status(error.code === "github_rate_limited" ? 503 : 500).json({ error: "Could not verify the GitHub PR for approval. Try again." });
   }
 });
 
@@ -205,7 +206,7 @@ router.post("/:slug/criteria/draft", async (req, res) => {
     });
     res.json({ draft: { ...draft, trace: undefined, provider: draft.trace?.provider || "", e2ee: draft.trace?.e2ee || "" } });
   } catch (error) {
-    const codes = { not_configured: 503, rate_limited: 429, timeout: 504, unreachable: 503, empty_question: 400,
+    const codes = { not_configured: 503, rate_limited: 429, ai_auth: 503, ai_credits: 503, github_rate_limited: 503, ai_bad_request: 400, timeout: 504, unreachable: 503, empty_question: 400,
       issue_not_found: 404, malformed_output: 502, empty_output: 502, upstream_error: 502 };
     if (!codes[error.code]) console.error("Criteria draft failed:", error.message);
     res.status(codes[error.code] || 500).json({ error: codes[error.code] ? error.message : "Could not draft criteria.", code: error.code || "" });

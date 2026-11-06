@@ -25,7 +25,7 @@ async function paymentsOverview(project, uid) {
   overview.account = viewer ? await accountSummary(viewer).catch(() => null) : null;
   if (!c.config.enabled) return overview;
   const [owner, pendingOwner, attestationSigner, sponsorStatus] = await Promise.all([
-    c.escrow.owner(), c.escrow.pendingOwner(), c.escrow.attestationSigner(), sponsor.status().catch(() => ({ configured: false })),
+    c.escrow.owner(), c.escrow.pendingOwner(), c.escrow.attestationSigner(), sponsor.status({ detailed: project.owner?.firebaseUid === uid }).catch(() => ({ configured: false })),
   ]);
   overview.sponsor = sponsorStatus;
   const people = members(project);

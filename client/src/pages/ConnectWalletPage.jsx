@@ -51,10 +51,12 @@ export default function ConnectWalletPage() {
   }
 
   async function disconnectWallet() {
+    const ok = window.confirm("Remove this payment account from OpenBounty? A passkey account cannot be recovered or re-linked, and anything it holds stays inaccessible. Accounts with a balance or escrow permissions cannot be removed.");
+    if (!ok) return;
     setWalletError("");
     setWalletBusy(true);
     try {
-      await apiRequest("/me/wallet", { method: "DELETE" });
+      await apiRequest("/me/wallet", { method: "DELETE", body: { confirm: true } });
       setWallet(null);
     } catch (error) {
       setWalletError(error.message);

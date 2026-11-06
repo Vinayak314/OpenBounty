@@ -4,11 +4,12 @@ const { ChainEvent, ChainCursor } = require("../../models/ChainEvent");
 const { chain, explorerTx } = require("./client");
 const { BOUNTY_STATUS, REFUND_REASONS } = require("./abi");
 const { formatUsdt } = require("./encoding");
-const { postWorkflowNotice, emitBounty } = require("../bounties/notify");
+const { postWorkflowNotice, emitBounty, plainText } = require("../bounties/notify");
 
 // Mirrors escrow events into MongoDB. Every log is applied once (unique txHash+logIndex), bounty updates are
 // ordered by (block, logIndex), and `reconcile` re-reads the contract to repair anything a missed log left behind.
-const CURSOR = "escrow";
+// The cursor is keyed by chain and escrow address, so pointing the server at a new escrow never skips or replays old blocks.
+const cursorName = () => { const { config } = chain(); return `escrow:${config.chainId}:${lower(config.escrow)}`; };
 let timer = null;
 let polling = false;
 let polls = 0;
@@ -35,12 +36,19 @@ async function applyToBounty(name, args, log) {
   let notice = null;
   const bounty = await Bounty.findOne({ "chain.bountyId": bountyId });
   if (!bounty) return;
-  const label = `bounty #${bounty.number} "${bounty.title}"`;
+  const label = `bounty #${bounty.number} "${plainText(bounty.title)}"`;
 
   if (name === "BountyFunded") {
     const matches = BigInt(args.amount) === BigInt(bounty.amount) && lower(args.criteriaHash) === lower(bounty.criteria.hash)
-      && lower(args.token) === lower(bounty.token);
-    if (!matches) console.warn(`Escrow terms for ${bountyId} differ from the stored draft.`);
+      && lower(args.token) === lower(bounty.token) && lower(args.repoRef) === lower(bounty.chain.repoRef)
+      && Number(args.submissionDeadline) === Math.floor(bounty.submissionDeadline.getTime() / 1000);
+    if (!matches) {
+      // Money was locked under terms we never approved. Keep the bounty closed; payouts are blocked until a human resolves it.
+      await Bounty.updateOne({ _id: bounty._id }, { $set: { "chain.termsMismatch": true, "chain.funder": lower(args.funder), "chain.fundTx": tx, ...position } });
+      emitBounty(bounty.project, bounty.number);
+      await postWorkflowNotice(bounty.project, `**Attention:** the escrow for ${label} was funded with terms that differ from the approved draft. It stays closed to claims. [Receipt](${explorerTx(tx)})`);
+      return;
+    }
     set = { status: "funded", "chain.funder": lower(args.funder), "chain.termsHash": args.termsHash, "chain.fundTx": tx };
     notice = `**Funded:** ${label} now holds ${formatUsdt(args.amount)} USDT in escrow. Contributors can request a claim. [Receipt](${explorerTx(tx)})`;
   } else if (name === "ClaimAccepted") {
@@ -49,9 +57,12 @@ async function applyToBounty(name, args, log) {
     set = {
       status: "claimed", "chain.claimVersion": Number(args.claimVersion), "chain.recipient": recipient,
       "chain.claimExpiry": new Date(Number(args.claimExpiry) * 1000), "chain.acceptTx": tx,
-      claimant: request ? { uid: request.uid, name: request.name, githubLogin: request.githubLogin, account: recipient } : { account: recipient },
-      submission: {}, cancelConsent: {},
+      claimant: request ? { uid: request.uid, githubId: request.githubId, name: request.name, githubLogin: request.githubLogin, account: recipient } : { account: recipient },
     };
+    // Only a genuinely new claim starts clean. Replaying an old ClaimAccepted (resync, re-scan) must not wipe the PR
+    // number or cancellation consent, which exist only in MongoDB (the chain keeps just a hash of the PR).
+    if (Number(args.claimVersion) > (bounty.chain.claimVersion || 0)) Object.assign(set, { submission: {}, cancelConsent: {} });
+    else if (bounty.claimant?.uid) delete set.claimant;
     if (request) {
       await Bounty.updateOne({ _id: bounty._id }, { $set: { "claimRequests.$[r].status": "accepted" } },
         { arrayFilters: [{ "r._id": request._id }] });
@@ -95,7 +106,13 @@ async function applyLog(log) {
     if (error.code === 11000) return false;
     throw error;
   }
-  if (args.bountyId) await applyToBounty(parsed.name, args, log);
+  try {
+    if (args.bountyId) await applyToBounty(parsed.name, args, log);
+  } catch (error) {
+    // Forget the log so the next poll applies it again; the poll aborts here, so the cursor does not pass it.
+    await ChainEvent.deleteOne({ txHash: log.transactionHash, logIndex: log.index ?? log.logIndex });
+    throw error;
+  }
   return true;
 }
 
@@ -107,21 +124,43 @@ async function processReceipt(receipt) {
   }
 }
 
+/** First block with code at the escrow address (archive RPC needed); falls back to 0 with a warning. */
+async function findDeployBlock(provider, address, latest) {
+  try {
+    if ((await provider.getCode(address, latest)) === "0x") return latest;
+    let low = 0;
+    let high = latest;
+    while (low < high) {
+      const mid = Math.floor((low + high) / 2);
+      if ((await provider.getCode(address, mid)) === "0x") low = mid + 1; else high = mid;
+    }
+    return low;
+  } catch {
+    console.warn("Could not find the escrow deployment block; set ESCROW_DEPLOY_BLOCK to avoid scanning from genesis.");
+    return 0;
+  }
+}
+
 async function poll() {
   const { config, provider } = chain();
   if (!config.escrow || polling) return;
   polling = true;
   try {
-    const cursor = await ChainCursor.findOneAndUpdate({ name: CURSOR }, { $setOnInsert: { block: Math.max(config.indexerStartBlock - 1, 0) } },
-      { upsert: true, returnDocument: "after" });
     // Raw call: ethers caches getBlockNumber, which can hide the newest block from this poll.
-    const latest = Number(await provider.send("eth_blockNumber", []));
+    const head = Number(await provider.send("eth_blockNumber", []));
+    const latest = head - config.indexerConfirmations; // stay behind the head so shallow reorgs cannot be indexed
+    let cursor = await ChainCursor.findOne({ name: cursorName() });
+    if (!cursor) {
+      const start = config.indexerStartBlock || await findDeployBlock(provider, config.escrow, head);
+      cursor = await ChainCursor.findOneAndUpdate({ name: cursorName() }, { $setOnInsert: { block: Math.max(start - 1, 0) } },
+        { upsert: true, returnDocument: "after" });
+    }
     let from = cursor.block + 1;
     while (from <= latest) {
       const to = Math.min(from + config.indexerBatchBlocks - 1, latest);
       const logs = await provider.getLogs({ address: config.escrow, fromBlock: from, toBlock: to });
       for (const log of logs) await applyLog(log);
-      await ChainCursor.updateOne({ name: CURSOR }, { $set: { block: to } });
+      await ChainCursor.updateOne({ name: cursorName() }, { $set: { block: to } });
       from = to + 1;
     }
     polls += 1;
@@ -141,6 +180,8 @@ async function reconcile(bounty) {
   const [onchain, effective] = await Promise.all([escrow.getBounty(bounty.chain.bountyId), escrow.effectiveStatus(bounty.chain.bountyId)]);
   const stored = BOUNTY_STATUS[Number(onchain.status)];
   const status = BOUNTY_STATUS[Number(effective)];
+  // Funded under terms we did not approve: report the chain truth (so a refund is possible) but never open it up.
+  if (bounty.chain.termsMismatch) return { status, onchain, mismatch: true };
   if (stored === "draft") {
     // Nothing on chain: a "funding" draft whose signature never landed goes back to draft after its intent expires.
     if (bounty.status === "funding" && bounty.updatedAt < new Date(Date.now() - 15 * 60 * 1000)) {
@@ -168,7 +209,8 @@ async function reconcile(bounty) {
 }
 
 async function reconcileActive() {
-  const active = await Bounty.find({ status: { $in: ACTIVE } }).limit(100);
+  // Least recently synced first, so more than 100 active bounties still all get visited over time.
+  const active = await Bounty.find({ status: { $in: ACTIVE }, "chain.termsMismatch": { $ne: true } }).sort({ "chain.syncedAt": 1 }).limit(100);
   for (const bounty of active) {
     try { await reconcile(bounty); } catch (error) { console.error("Reconcile failed:", error.shortMessage || error.message); }
   }

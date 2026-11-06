@@ -25,7 +25,7 @@ function headers(accept = "application/vnd.github+json", token = process.env.GIT
 }
 
 async function api(path, { method = "GET", body, token } = {}) {
-  if (Date.now() < apiRetryAt) throw new GithubError("GitHub rate limit reached.", "rate_limited");
+  if (Date.now() < apiRetryAt) throw new GithubError("GitHub rate limit reached.", "github_rate_limited");
   const response = await fetch(`https://api.github.com${path}`, {
     method,
     headers: { ...headers(undefined, token), ...(body ? { "Content-Type": "application/json" } : {}) },
@@ -39,8 +39,9 @@ async function api(path, { method = "GET", body, token } = {}) {
     const reset = exhausted ? (Number(response.headers.get("x-ratelimit-reset")) || 0) * 1000 - Date.now() : 0;
     const message = await response.json().then((body) => String(body.message || "")).catch(() => "");
     if (response.status === 429 || exhausted || retry > 0 || /rate limit/i.test(message)) {
-      apiRetryAt = Date.now() + Math.max(retry, reset, 60000);
-      throw new GithubError("GitHub rate limit reached.", "rate_limited");
+      // Short breaker: a stale hour-long block would hide a recovered quota from every request.
+      apiRetryAt = Date.now() + Math.min(Math.max(retry, 30000), 120000);
+      throw new GithubError("GitHub rate limit reached.", "github_rate_limited");
     }
     throw new GithubError("GitHub denied access to this resource.", "forbidden");
   }
@@ -68,7 +69,7 @@ async function getSnapshot(fullName) {
     try {
       value = await loadApiSnapshot(fullName);
     } catch (error) {
-      if (!["rate_limited", "bad_token", "forbidden"].includes(error.code)) throw error;
+      if (!["github_rate_limited", "bad_token", "forbidden"].includes(error.code)) throw error;
       try {
         value = await listPublicArchive(fullName, includeFile);
       } catch (archiveError) {
@@ -343,8 +344,13 @@ async function upsertReviewComment(fullName, number, marker, text, previousId) {
   }
   // Recover an already-created comment if the first response was lost.
   const viewer = await api("/user", { token });
-  const comments = await api(`${path}/${number}/comments?per_page=100&sort=created&direction=desc`, { token });
-  const ownComment = comments.find((comment) => comment.user?.id === viewer.id && comment.body?.startsWith(marker + "\n"));
+  let ownComment = null;
+  // Walk the whole conversation (bounded), not just the newest 100 comments, so a busy PR never gets a duplicate.
+  for (let page = 1; page <= 10 && !ownComment; page += 1) {
+    const comments = await api(`${path}/${number}/comments?per_page=100&page=${page}`, { token });
+    ownComment = comments.find((comment) => comment.user?.id === viewer.id && comment.body?.startsWith(marker + "\n")) || null;
+    if (comments.length < 100) break;
+  }
   if (ownComment) return api(`${path}/comments/${ownComment.id}`, { method: "PATCH", body, token });
   return api(`${path}/${number}/comments`, { method: "POST", body, token });
 }

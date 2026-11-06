@@ -10,6 +10,20 @@ class AiError extends Error {
   }
 }
 
+// 401/403: bad key; 402: out of credits; 400/422: request rejected; 503 "no provider" is deterministic, so not retried.
+function classifyFailure(status, detail) {
+  if (status === 401 || status === 403) return { code: "ai_auth", message: "The AI service rejected the API key.", retryable: false };
+  if (status === 402) return { code: "ai_credits", message: "The AI service has no credits left.", retryable: false };
+  if (status === 400 || status === 404 || status === 413 || status === 422) {
+    return { code: "ai_bad_request", message: "The AI service rejected the request.", retryable: false };
+  }
+  if (status === 429) return { code: "rate_limited", message: "The AI service is rate limited. Try again shortly.", retryable: true };
+  if (status === 503 && /no_provider/i.test(detail)) {
+    return { code: "upstream_error", message: "No 0G provider is available for this model and trust mode.", retryable: false };
+  }
+  return { code: "upstream_error", message: "The AI service returned an error.", retryable: status >= 500 };
+}
+
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // All model inference goes through 0G Private Computer (OpenAI-compatible router).
@@ -41,12 +55,12 @@ async function chatCompletion({ messages, maxTokens, temperature = 0.2, signal }
       // The router sends "<trace id>, <request uuid>"; the last value matches body.x_0g_trace.request_id.
       const headerRequestId = (response.headers.get("x-request-id") || "").split(",").pop().trim();
       if (!response.ok) {
-        const retryable = response.status === 429 || response.status >= 500;
-        lastError = new AiError(
-          response.status === 429 ? "The AI service is rate limited. Try again shortly." : "The AI service returned an error.",
-          { code: response.status === 429 ? "rate_limited" : "upstream_error", status: response.status, retryable },
-        );
-        if (!retryable) throw lastError;
+        // Status and the router's error code (never the prompt) go to the log so operators can diagnose outages.
+        const detail = await response.json().then((body) => String(body?.error?.code || body?.error?.type || body?.error?.message || "").slice(0, 120)).catch(() => "");
+        console.error(`0G request failed: HTTP ${response.status}${detail ? ` (${detail})` : ""}`);
+        const known = classifyFailure(response.status, detail);
+        lastError = new AiError(known.message, { code: known.code, status: response.status, retryable: known.retryable });
+        if (!known.retryable) throw lastError;
         continue;
       }
       const data = await response.json();

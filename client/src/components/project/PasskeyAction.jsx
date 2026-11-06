@@ -56,7 +56,7 @@ export default function PasskeyAction({ label, prepare, onDone, compact = false,
           <p className="text-ob-navy">{intent.summary}</p>
           <p className="mt-1 text-ob-slate">{intent.mode === "sign" ? "This signs your consent; nothing is sent yet." : "Network fees are paid by OpenBounty. You need no gas token."}</p>
           <div className="mt-2 flex gap-2">
-            <button type="button" onClick={approve} disabled={Boolean(busy)} className="inline-flex items-center gap-1 rounded-lg bg-ob-navy px-3 py-2 font-semibold text-white disabled:opacity-50">
+            <button type="button" autoFocus onClick={approve} disabled={Boolean(busy)} aria-busy={busy === "approve"} className="inline-flex items-center gap-1 rounded-lg bg-ob-navy px-3 py-2 font-semibold text-white disabled:opacity-50">
               <Fingerprint className="size-4" /> {busy === "approve" ? "Confirm on your device…" : "Approve with passkey"}
             </button>
             <button type="button" onClick={() => setIntent(null)} disabled={Boolean(busy)} className="rounded-lg border border-ob-line px-3 py-2">Cancel</button>

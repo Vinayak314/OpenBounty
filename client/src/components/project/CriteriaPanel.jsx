@@ -17,17 +17,35 @@ export default function CriteriaPanel({ slug }) {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
+  // Re-read the approved version regularly so another maintainer's approval shows up. The editor is only
+  // replaced when the viewer has no unsaved changes of their own.
   useEffect(() => {
     let active = true;
-    apiRequest(path)
-      .then((result) => {
+    let timer;
+    let first = true;
+    async function load() {
+      try {
+        const result = await apiRequest(path);
         if (!active) return;
-        setCriteria(result.criteria);
+        setCriteria((current) => {
+          const previous = current ? current.items.map((item) => item.text) : null;
+          setItems((editing) => {
+            const clean = editing.map((text) => text.trim()).filter(Boolean);
+            const untouched = first || previous === null || JSON.stringify(clean) === JSON.stringify(previous);
+            return untouched ? result.criteria.items.map((item) => item.text) : editing;
+          });
+          return result.criteria;
+        });
         setCanEdit(result.canEdit);
-        setItems(result.criteria.items.map((item) => item.text));
-      })
-      .catch((loadError) => { if (active) setError(loadError.message); });
-    return () => { active = false; };
+        first = false;
+      } catch (loadError) {
+        if (active) setError(loadError.message);
+      } finally {
+        if (active) timer = setTimeout(load, 15000);
+      }
+    }
+    load();
+    return () => { active = false; clearTimeout(timer); };
   }, [path]);
 
   const clean = items.map((text) => text.trim()).filter(Boolean);

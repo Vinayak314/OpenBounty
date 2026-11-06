@@ -5,6 +5,13 @@ let io = null;
 const setIo = (value) => { io = value; };
 const getIo = () => io;
 
+/** User-supplied text (titles, names) for chat notices: one line, no markdown, mentions, links or HTML. */
+function plainText(value, max = 80) {
+  return String(value ?? "").replace(/\s+/g, " ").trim().slice(0, max)
+    .replace(/[\\`*_[\]()#~|!]/g, "\\$&")
+    .replace(/[&<>@]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "@": "&#64;" })[char]);
+}
+
 /** Deterministic workflow notice in the project chat (no model call). */
 async function postWorkflowNotice(projectId, body) {
   try {
@@ -22,4 +29,4 @@ function emitBounty(projectId, number) {
   io?.to(`project:${projectId}`).emit("bounty:updated", { number });
 }
 
-module.exports = { setIo, getIo, postWorkflowNotice, emitBounty };
+module.exports = { setIo, getIo, postWorkflowNotice, emitBounty, plainText };

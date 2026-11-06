@@ -6,7 +6,7 @@ const ReviewJobSchema = new mongoose.Schema({
   project: { type: mongoose.Schema.Types.ObjectId, ref: "Project", required: true },
   prNumber: { type: Number, required: true },
   headSha: { type: String, default: "" },
-  source: { type: String, enum: ["chat", "webhook", "ci", "retry"], default: "chat" },
+  source: { type: String, enum: ["chat", "webhook", "ci", "retry", "panel"], default: "chat" },
   status: { type: String, enum: ["queued", "running", "complete", "failed", "skipped"], required: true },
   errorCode: { type: String, default: "", maxlength: 40 },
   error: { type: String, default: "", maxlength: 400 },

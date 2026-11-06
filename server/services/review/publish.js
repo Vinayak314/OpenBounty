@@ -7,8 +7,10 @@ const { VERDICTS } = require("./validate");
 // Keep model/repository text out of Markdown links, HTML and mention syntax.
 function plain(value) {
   return String(value || "").replace(/\s+/g, " ")
+    .replace(/[\\`*_[\]#]/g, "\\$&")
     .replace(/[&<>@]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "@": "&#64;" })[char])
-    .replace(/[\\`*_[\]#]/g, "\\$&");
+    // Keep bare URLs and www. hosts from auto-linking in a comment posted from the bot's account.
+    .replace(/\b(https?|ftp):\/\//gi, "$1:&#8203;//").replace(/\bwww\./gi, "www&#8203;.");
 }
 
 function traceLine(trace) {

@@ -21,10 +21,16 @@ function resolveQuestion(question, recent, authorUid) {
 // Remove obvious secrets before anything reaches a prompt.
 const SECRET_PATTERNS = [
   /\b(?:sk|mk|ghp|gho|ghs|github_pat)[-_][A-Za-z0-9_]{16,}\b/g,
-  /\b0x[a-fA-F0-9]{64}\b/g,
   /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g,
 ];
-const redact = (text) => SECRET_PATTERNS.reduce((out, re) => out.replace(re, "[redacted]"), String(text || ""));
+// A 0x + 64 hex value is a private key only when its line says so. Hashes, curve constants and typehashes in
+// real code (for example HALF_N) must stay readable or the reviewer cannot verify them.
+const HEX64 = /\b0x[a-fA-F0-9]{64}\b/g;
+const KEY_CONTEXT = /priv(?:ate)?[\s_-]*key|secret|mnemonic|seed|passw|credential|api[\s_-]*key|auth[\s_-]*token|signer[\s_-]*key|\bkey\s*[:=]/i;
+function redact(text) {
+  const base = SECRET_PATTERNS.reduce((out, re) => out.replace(re, "[redacted]"), String(text || ""));
+  return base.replace(/^.*\b0x[a-fA-F0-9]{64}\b.*$/gm, (line) => (KEY_CONTEXT.test(line) ? line.replace(HEX64, "[redacted]") : line));
+}
 
 function projectFacts(project) {
   const repo = project.githubRepository || {};
@@ -101,7 +107,7 @@ async function buildContext({ project, triggerMessage, question, config }) {
     budget -= body.length;
     if (budget < 0) break;
     history.unshift({
-      author: message.authorUid === AGENT_UID ? "Agent" : (message.authorName || "User"),
+      author: message.authorUid === AGENT_UID ? "Agent" : String(message.authorName || "User").replace(/[\r\n<>]+/g, " ").slice(0, 60),
       body,
     });
   }

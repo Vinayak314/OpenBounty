@@ -12,6 +12,14 @@ const router = express.Router();
 
 router.use(requireFirebaseUser);
 
+function githubHeaders() {
+  const headers = { Accept: "application/vnd.github+json", "User-Agent": "OpenBounty" };
+  const token = process.env.GITHUB_TOKEN?.trim() || process.env.GITHUB_REVIEW_TOKEN?.trim();
+  if (token) headers.Authorization = `Bearer ${token}`;
+  return headers;
+}
+const needsReverify = (res) => res.status(409).json({ error: "Verify your GitHub account again (sign in with GitHub) before continuing." });
+
 function ensureDatabase(res) {
   if (mongoose.connection.readyState === 1) return true;
   res.status(503).json({ error: "The database is not connected." });
@@ -56,15 +64,25 @@ router.put("/github", async (req, res) => {
   }
   const username = typeof req.body?.username === "string" ? req.body.username.trim() : "";
   if (!/^[a-zA-Z0-9-]{1,39}$/.test(username)) return res.status(400).json({ error: "A valid GitHub username is required." });
+  // The GitHub account id Firebase verified when this user signed in. A typed username must resolve to this id.
+  const verifiedId = String(req.firebaseUser.firebase?.identities?.["github.com"]?.[0] || "");
+  if (!/^\d+$/.test(verifiedId)) return res.status(403).json({ error: "Sign in with GitHub again to verify your account." });
 
   try {
-    const response = await fetch(`https://api.github.com/users/${encodeURIComponent(username)}`, {
-      headers: { Accept: "application/vnd.github+json" },
-    });
+    const headers = { Accept: "application/vnd.github+json", "User-Agent": "OpenBounty" };
+    const token = process.env.GITHUB_TOKEN?.trim() || process.env.GITHUB_REVIEW_TOKEN?.trim();
+    if (token) headers.Authorization = `Bearer ${token}`;
+    // Look the account up by its verified numeric id, so the typed name can only confirm it, never choose it.
+    const response = await fetch(`https://api.github.com/user/${verifiedId}`, { headers });
+    if (response.status === 403 || response.status === 429) return res.status(503).json({ error: "GitHub is rate limiting OpenBounty. Try again in a few minutes." });
     if (!response.ok) return res.status(422).json({ error: "Could not verify that GitHub profile." });
     const github = await response.json();
+    if (String(github.id) !== verifiedId || String(github.login || "").toLowerCase() !== username.toLowerCase()) {
+      return res.status(403).json({ error: "That username does not belong to the GitHub account you signed in with." });
+    }
     const user = await getOrCreateUser(req.firebaseUser);
     user.github = {
+      id: verifiedId,
       username: github.login,
       profileUrl: github.html_url,
       avatarUrl: github.avatar_url,
@@ -75,6 +93,7 @@ router.put("/github", async (req, res) => {
     await user.save();
     res.json({ user: userResponse(user) });
   } catch (error) {
+    if (error.code === 11000) return res.status(409).json({ error: "That GitHub account is already linked to another OpenBounty user." });
     console.error("Could not link GitHub profile:", error.message);
     res.status(500).json({ error: "Could not save your GitHub profile." });
   }
@@ -86,8 +105,9 @@ router.get("/github/repositories", async (req, res) => {
     const user = await getOrCreateUser(req.firebaseUser);
     const username = user.github?.username;
     if (!username) return res.status(409).json({ error: "Connect your GitHub profile before adding a repository." });
+    if (!user.github.id) return needsReverify(res);
     const response = await fetch(`https://api.github.com/users/${encodeURIComponent(username)}/repos?sort=pushed&per_page=100`, {
-      headers: { Accept: "application/vnd.github+json", "User-Agent": "OpenBounty" },
+      headers: githubHeaders(),
     });
     if (!response.ok) return res.status(502).json({ error: "GitHub repositories could not be loaded." });
     const repositories = await response.json();
@@ -145,12 +165,14 @@ router.post("/projects", async (req, res) => {
     if (!username || repoOwner.toLowerCase() !== username.toLowerCase()) {
       return res.status(403).json({ error: "You can only add repositories from your connected GitHub account." });
     }
+    if (!user.github.id) return needsReverify(res);
     const response = await fetch(`https://api.github.com/repos/${encodeURIComponent(repoOwner)}/${encodeURIComponent(repoName)}`, {
-      headers: { Accept: "application/vnd.github+json", "User-Agent": "OpenBounty" },
+      headers: githubHeaders(),
     });
+    if (response.status === 403 || response.status === 429) return res.status(503).json({ error: "GitHub is rate limiting OpenBounty. Try again in a few minutes." });
     if (!response.ok) return res.status(422).json({ error: "That GitHub repository could not be verified." });
     const repo = await response.json();
-    if (repo.owner.login.toLowerCase() !== username.toLowerCase()) return res.status(403).json({ error: "You can only add repositories from your connected GitHub account." });
+    if (String(repo.owner.id) !== user.github.id || repo.owner.login.toLowerCase() !== username.toLowerCase()) return res.status(403).json({ error: "You can only add repositories from your connected GitHub account." });
     const existing = await Project.findOne({ "githubRepository.fullName": repo.full_name });
     if (existing) {
       if (String(existing.owner) === String(user._id)) return res.status(409).json({ error: "That repository is already in your projects." });
@@ -179,6 +201,9 @@ router.delete("/wallet", async (req, res) => {
   try {
     const user = await getOrCreateUser(req.firebaseUser);
     const address = user.wallet?.address || "";
+    if (address && req.body?.confirm !== true) {
+      return res.status(400).json({ error: "Confirm that you want to remove this payment account." });
+    }
     if (address) {
       // A bound recipient or funder account must stay linked while money depends on it.
       const active = await Bounty.exists({
@@ -186,6 +211,28 @@ router.delete("/wallet", async (req, res) => {
         $or: [{ "chain.recipient": address }, { "chain.funder": address }, { claimRequests: { $elemMatch: { account: address, status: "pending" } } }],
       });
       if (active) return res.status(409).json({ error: "This account is part of an active bounty. Finish or cancel it first." });
+      // Only OpenBounty's approved actions can spend from a passkey account, so unlinking one that holds funds or
+      // escrow roles would strand them.
+      try {
+        const { chain } = require("../services/chain/client");
+        const c = chain();
+        if (c.config.accountsEnabled) {
+          const [balance, owner, maintainer] = await Promise.all([
+            c.token.balanceOf(address),
+            c.escrow ? c.escrow.owner() : "",
+            c.escrow ? c.escrow.isMaintainer(address) : false,
+          ]);
+          if (balance > 0n) {
+            return res.status(409).json({ error: `This account still holds ${Number(balance) / 1e6} USDT, which only this account can spend. Keep it linked, or move the funds through a bounty first.` });
+          }
+          if (String(owner).toLowerCase() === address || maintainer) {
+            return res.status(409).json({ error: "This account holds escrow permissions. Ask the owner to revoke them (or transfer ownership) before removing it." });
+          }
+        }
+      } catch (chainError) {
+        console.error("Wallet removal check failed:", chainError.shortMessage || chainError.message);
+        return res.status(503).json({ error: "Could not check the account's balance on chain. Try again in a moment." });
+      }
     }
     user.wallet = { address: "", chainId: null, kind: "", connectedAt: null, passkey: {}, deployTx: "", deployed: false, challengeMessage: "", challengeExpiresAt: null };
     await user.save();

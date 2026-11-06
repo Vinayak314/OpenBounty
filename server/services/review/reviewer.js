@@ -39,9 +39,9 @@ function buildReviewMessages({ pr, criteria, diff, issues }) {
     ? pr.ci.runs.map((r) => `- ${r.name}: ${r.conclusion || r.status}`).join("\n")
     : "No CI results.";
   const files = diff.included.map((f) => `=== ${neutralize(f.path)}${f.partial ? " [partial]" : ""}\n${neutralize(redact(f.text))}`).join("\n\n");
-  const omitted = diff.omitted.length ? `\nFiles not shown: ${diff.omitted.map((f) => `${f.path} (${f.reason})`).join("; ")}` : "";
+  const omitted = diff.omitted.length ? `\nFiles not shown: ${diff.omitted.map((f) => `${neutralize(f.path)} (${f.reason})`).join("; ")}` : "";
   const user = [
-    `<pull_request>\n#${pr.number} ${neutralize(pr.title)} by ${pr.author} → ${pr.baseBranch} (${pr.draft ? "draft" : pr.state})\n${neutralize(pr.body).slice(0, 3000)}\n</pull_request>`,
+    `<pull_request>\n#${pr.number} ${neutralize(pr.title)} by ${neutralize(pr.author)} → ${pr.baseBranch} (${pr.draft ? "draft" : pr.state})\n${neutralize(pr.body).slice(0, 3000)}\n</pull_request>`,
     issuesBlock(issues),
     `<criteria>\n${criteria.map((c) => `${c.id}: ${neutralize(c.text)}`).join("\n")}\n</criteria>`,
     `<ci>\nOverall: ${pr.ci.state}\n${ci}\n</ci>`,
@@ -66,7 +66,11 @@ async function evaluateReview({ pr, criteria, config, issues = [] }) {
   let diffTruncated = false;
   let ai = { requestId: "", model: "", trace: null };
   if (criteria.length) {
-    const diff = buildDiffBudget(pr.files, Math.floor(config.maxContextChars * 1.4));
+    // The prompt as a whole is bounded: measure everything except the diff, and give the diff what is left.
+    const fixed = buildReviewMessages({ pr, criteria, diff: { included: [], omitted: [] }, issues })
+      .reduce((sum, message) => sum + message.content.length, 0);
+    const diffBudget = Math.max(2000, Math.min(Math.floor(config.maxContextChars * 1.4), (config.maxPromptChars || 60000) - fixed));
+    const diff = buildDiffBudget(pr.files, diffBudget);
     diffTruncated = diff.truncated || pr.filesTruncated;
     const completion = await chatCompletion({ messages: buildReviewMessages({ pr, criteria, diff, issues }), maxTokens: 4000, temperature: 0.1 }, config);
     const validated = validateReport(extractJson(completion.text), { criteria, shownDiff: diff.included });
@@ -117,7 +121,14 @@ async function reviewPullRequest({ project, prNumber, requestedByUid, expectedHe
         results: existing.results, ci: pr.ci, pr, diffTruncated: existing.diffTruncated,
         droppedCitations: existing.droppedCitations, hasCriteria,
       });
+      const changedVerdict = verdict !== existing.verdict;
       existing.set({ ci: ciView(pr), prState: pr.state, verdict, verdictReasons: reasons });
+      if (changedVerdict) {
+        // The recommendation moved, so the evidence a maintainer approved is no longer what the report says:
+        // re-hash it and drop the approval instead of showing "Changes requested" next to "Approved by X".
+        existing.reportHash = hashReport({ sha: pr.headSha, criteriaHash, results: existing.results, verdict });
+        existing.approval = undefined;
+      }
       await existing.save();
       return { review: existing, reused: true };
     }

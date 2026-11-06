@@ -5,7 +5,8 @@ const Review = require("../models/Review");
 const MAX_ITEMS = 20;
 const MAX_LENGTH = 500;
 // Strips a leading bullet ("-", "*", "•") or number ("1.", "2)", "c3:") from a criterion line.
-const BULLET = /^(?:[-*•]|c?\d{1,2}[.):-])\s*/i;
+// Whitespace is required after the marker, so "1.5x faster" and "-5% error" keep their numbers.
+const BULLET = /^(?:[-*•]|c?\d{1,2}[.):-])\s+/i;
 
 function parseCriteria(raw) {
   return String(raw || "").split("\n").map((line) => line.trim().replace(BULLET, "").trim()).filter(Boolean);

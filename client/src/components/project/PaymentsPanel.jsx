@@ -96,7 +96,7 @@ export default function PaymentsPanel({ slug, refreshKey, onChanged }) {
           {sponsor?.configured && (
             <p className="mt-3 text-[11px] text-ob-slate">
               Sponsor controls: allowlisted escrow/USDT calls only · {sponsor.limits.userTxPerHour}/user/hour, {sponsor.limits.userTxPerDay}/user/day,
-              {" "}{sponsor.limits.globalTxPerHour}/hour overall · {wbt(sponsor.spentTodayWei)} of {wbt(sponsor.dailyBudgetWei)} WBT budget used today.
+              {" "}{sponsor.limits.globalTxPerHour}/hour overall{sponsor.dailyBudgetWei ? ` · ${wbt(sponsor.spentTodayWei)} of ${wbt(sponsor.dailyBudgetWei)} WBT budget used today.` : "."}
             </p>
           )}
         </details>

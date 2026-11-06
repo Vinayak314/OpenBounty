@@ -21,7 +21,8 @@ function ProjectWorkspace({ slug }) {
   const [project, setProject] = useState(null);
   const chat = useChat(project?.slug);
   const [loading, setLoading] = useState(Boolean(slug));
-  const [projectError, setProjectError] = useState("");
+  const [loadError, setProjectError] = useState("");
+  const projectError = slug ? loadError : "Choose a project from your dashboard to open its workspace.";
   const [query, setQuery] = useState("");
   const [replyTo, setReplyTo] = useState(null);
   const [editing, setEditing] = useState(null);
@@ -29,13 +30,8 @@ function ProjectWorkspace({ slug }) {
 
   useEffect(() => {
     let active = true;
-    if (!slug) {
-      setLoading(false);
-      setProjectError("Choose a project from your dashboard to open its workspace.");
-      return () => { active = false; };
-    }
-    setLoading(true);
-    setProjectError("");
+    if (!slug) return undefined;
+    // ProjectWorkspace is keyed by slug, so loading/error start fresh for each project.
     apiRequest(`/projects/${encodeURIComponent(slug)}`)
       .then((result) => { if (active) setProject(result.project); })
       .catch((error) => { if (active) setProjectError(error.message); })

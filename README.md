@@ -23,7 +23,7 @@ npm ci
 npm run dev
 ```
 
-Open the Vite URL, sign in with GitHub and add a public repository you control. For a hosted client, set `VITE_API_URL` to the API origin, add the client origin to `CLIENT_ORIGINS` and Firebase authorized domains, and route Socket.IO to the backend.
+Open the Vite URL, sign in with GitHub and add a public repository you control. Your GitHub profile is bound to the numeric GitHub account id in your verified sign-in token, so a typed username can never claim another person's account; profiles saved before this check must sign in with GitHub once more. For a hosted client, set `VITE_API_URL` to the API origin, add the client origin to `CLIENT_ORIGINS` and Firebase authorized domains, and route Socket.IO to the backend.
 
 ## 0G · Build with 0G Private Computer
 
@@ -143,11 +143,13 @@ Set `WEBAUTHN_RP_ID` to the client's hostname and `WEBAUTHN_ORIGINS` to its exac
 - `execute` verifies P-256 with the RIP-7212 precompile, which Whitechain Sepolia answers (checked with `eth_call`). Without it, OpenZeppelin falls back to Solidity verification (about 450k to 860k gas locally).
 - Test assets only. The designated USDT is an upgradeable proxy controlled by its issuer.
 
+Passkey accounts that hold USDT or escrow permissions cannot be removed from OpenBounty, because only OpenBounty's approved actions can spend from them. One pull request can back only one bounty, draft PRs cannot be registered, and payout re-checks that the PR on file is the one attested on chain.
+
 Run the payment tests with `cd contracts && npx hardhat test` (escrow and passkey accounts) and `cd server && npm test` (includes an end-to-end run against a local Hardhat node and in-memory MongoDB).
 
 ## Architecture and scope
 
-The React workspace uses Firebase sign-in, an Express and Socket.IO API, and MongoDB. The server verifies webhook signatures, fetches GitHub data, calls 0G Private Computer and records the report. Local review jobs run in a single process and record their status in MongoDB. If the worker stops before finishing, retry from **PR reviews**, use `/review`, or redeliver the GitHub event. The Solidity escrow and passkey account contracts live in [contracts](contracts/README.md). Bounty payouts go through the escrow; the PR reviews screen's approval is for PRs that are not bounty submissions.
+The React workspace uses Firebase sign-in, an Express and Socket.IO API, and MongoDB. The server verifies webhook signatures, fetches GitHub data, calls 0G Private Computer and records the report. Local review jobs run in a single process and record their status in MongoDB; jobs interrupted by a restart are marked failed and can be retried. Rate limits, the queue, debounce timers, webhook delivery dedupe and sponsor reservation locks are in memory, so they reset on restart and need shared storage (for example Redis) before running several server instances. If the worker stops before finishing, retry from **PR reviews**, use `/review`, or redeliver the GitHub event. The Solidity escrow and passkey account contracts live in [contracts](contracts/README.md). Bounty payouts go through the escrow; the PR reviews screen's approval is for PRs that are not bounty submissions.
 
 The 0G integration is the project guide, scope assistant and advisory reviewer. Human maintainers approve criteria and contributions. The source uses a public-repository allowlist for GitHub comment publishing.
 

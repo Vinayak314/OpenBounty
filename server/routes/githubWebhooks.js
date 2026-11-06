@@ -96,7 +96,8 @@ router.post("/", express.raw({ type: "application/json", limit: "1mb" }), async 
 
   try {
     const result = name === "pull_request" ? await handlePullRequest(req, event) : await handleCiEvent(req, name, event);
-    // Let GitHub redeliver anything we could not accept.
+    // Forget rejected deliveries so a manual "Redeliver" from GitHub's webhook page is processed. GitHub does not
+    // retry failed deliveries on its own.
     if (result.code >= 400) deliveries.delete(delivery);
     return result.status ? res.status(result.code).json({ status: result.status }) : res.sendStatus(result.code);
   } catch (error) {

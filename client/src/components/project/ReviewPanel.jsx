@@ -122,10 +122,19 @@ export default function ReviewPanel({ slug }) {
             && <JobBanner job={selectedJob} onRetry={canRequest ? () => requestReview(selected.prNumber) : null} busy={requesting} />}
           <EvidenceReport report={selected} />
           {canRequest && (
-            <button type="button" disabled={requesting} onClick={() => requestReview(selected.prNumber, selected.stale ? false : true)}
-              className="rounded-lg border border-ob-line bg-white px-3 py-2 text-xs font-semibold disabled:opacity-50">
-              {selected.stale ? "Review the current commit" : "Run a fresh 0G review"}
-            </button>
+            <div className="flex flex-wrap gap-2">
+              {/* Refreshing re-reads the PR and CI without a new inference when the commit and criteria are unchanged. */}
+              <button type="button" disabled={requesting} onClick={() => requestReview(selected.prNumber, false)}
+                className="rounded-lg border border-ob-line bg-white px-3 py-2 text-xs font-semibold disabled:opacity-50">
+                {selected.stale ? "Review the current commit" : "Refresh PR and CI status"}
+              </button>
+              {!selected.stale && (
+                <button type="button" disabled={requesting} onClick={() => requestReview(selected.prNumber, true)}
+                  className="rounded-lg border border-ob-line bg-white px-3 py-2 text-xs font-semibold disabled:opacity-50">
+                  Run a fresh 0G review
+                </button>
+              )}
+            </div>
           )}
           {selected.githubPublication === "published" && selected.githubCommentUrl && (
             <a className="text-xs font-semibold text-sky-700 underline" href={selected.githubCommentUrl} target="_blank" rel="noreferrer">View the GitHub evidence comment</a>
@@ -159,17 +168,22 @@ const JOB_COPY = {
   failed: "Review could not finish",
 };
 
+const SOURCE_LABELS = { webhook: "a GitHub event", ci: "a CI update", panel: "this screen", chat: "chat", retry: "a retry" };
+
 function JobBanner({ job, onRetry, busy }) {
   const failed = job.status === "failed";
+  // The server flags queued/running jobs that stopped moving (for example after a restart) so they can be retried.
+  const stuck = Boolean(job.stuck);
   return (
     <div role={failed ? "alert" : "status"} className={`mt-3 rounded-lg p-3 text-xs ${failed ? "bg-rose-50 text-rose-800" : "bg-sky-50 text-sky-900"}`}>
       <p className="font-semibold">
         PR #{job.prNumber}: {JOB_COPY[job.status] || job.status}
         {job.headSha && <> · commit <code>{job.headSha.slice(0, 7)}</code></>}
-        {job.source && <> · from {job.source === "webhook" ? "GitHub event" : job.source === "ci" ? "CI update" : job.source}</>}
+        {job.source && <> · from {SOURCE_LABELS[job.source] || job.source}</>}
       </p>
       {failed && job.error && <p className="mt-1">{job.error}</p>}
-      {failed && onRetry && (
+      {stuck && <p className="mt-1">This looks stuck. You can retry it.</p>}
+      {(failed || stuck) && onRetry && (
         <button type="button" onClick={onRetry} disabled={busy} className="mt-2 rounded-lg bg-rose-700 px-3 py-1.5 font-semibold text-white disabled:opacity-50">
           Retry review
         </button>

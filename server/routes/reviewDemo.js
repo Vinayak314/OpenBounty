@@ -28,7 +28,11 @@ const revisions = [
   },
 ];
 
+const { createLimiter } = require("../services/rateLimit");
+
 const windowMs = 60 * 60 * 1000;
+// Each visitor gets a small share of the hourly quota, so one anonymous client cannot use it all up.
+const perVisitor = createLimiter({ windowMs, limit: Number(process.env.ZEROG_DEMO_PER_IP_PER_HOUR) > 0 ? Number(process.env.ZEROG_DEMO_PER_IP_PER_HOUR) : 6 });
 let started = [];
 let active = 0;
 
@@ -51,6 +55,9 @@ router.post("/", async (req, res) => {
   const limit = Number.isSafeInteger(configuredLimit) && configuredLimit > 0 ? configuredLimit : 24;
   const now = Date.now();
   started = started.filter((at) => now - at < windowMs);
+  if (!perVisitor(req.ip || "unknown")) {
+    return res.status(429).json({ error: "You have used your hourly share of live demo runs. Try again later." });
+  }
   if (active >= 2 || started.length >= limit) {
     return res.status(429).json({ error: "The demo is busy or has reached its hourly limit. Try again later." });
   }

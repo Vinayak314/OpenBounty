@@ -6,22 +6,14 @@ const { publicChainConfig } = require("../config/chain");
 const wallet = require("../services/chain/wallet");
 const sponsor = require("../services/chain/sponsor");
 const { sendError } = require("./paymentErrors");
+const { limitRequests } = require("../services/rateLimit");
 
 const router = express.Router();
 router.use(requireFirebaseUser);
 
-// Simple per-user throttle for passkey ceremonies and relays (the sponsor has its own budget limits too).
-const recent = new Map();
-function throttle(req, res, next) {
-  const key = req.firebaseUser.uid;
-  const now = Date.now();
-  const hits = (recent.get(key) || []).filter((at) => now - at < 60000);
-  if (hits.length >= 20) return res.status(429).json({ error: "Too many payment requests. Wait a minute and try again." });
-  hits.push(now);
-  recent.set(key, hits);
-  if (recent.size > 5000) recent.delete(recent.keys().next().value);
-  next();
-}
+// Per-user throttles for passkey ceremonies and relays (the sponsor has its own budget limits too).
+const throttle = limitRequests({ windowMs: 60000, limit: 20 });
+const readThrottle = limitRequests({ windowMs: 60000, limit: 60 });
 
 function ensureDatabase(res) {
   if (mongoose.connection.readyState === 1) return true;
@@ -86,9 +78,9 @@ router.post("/intents/:intentId/submit", throttle, async (req, res) => {
   }
 });
 
-router.get("/sponsor", async (_req, res) => {
+router.get("/sponsor", readThrottle, async (_req, res) => {
   try {
-    res.json({ sponsor: await sponsor.status() });
+    res.json({ sponsor: await sponsor.status() }); // health and limits only
   } catch (error) {
     sendError(res, error, "Could not read the sponsor status.");
   }

@@ -132,7 +132,7 @@ function intentResponse(intent, wallet) {
   return {
     intentId: intent.id, kind: intent.kind, mode: intent.mode, summary: intent.summary,
     challenge: Buffer.from(intent.digest.slice(2), "hex").toString("base64url"),
-    credentialId: wallet.passkey.credentialId, expiresAt: intent.expiresAt,
+    credentialId: wallet.passkey.credentialId, rpId: chain().config.rpId, expiresAt: intent.expiresAt,
   };
 }
 

@@ -31,6 +31,10 @@ function validateReport(raw, { criteria, shownDiff }) {
     file.path,
     new Set([...file.text.matchAll(/^L(\d+)[+ ] /gm)].map((match) => Number(match[1]))),
   ]));
+  const addedLines = new Map(shownDiff.map((file) => [
+    file.path,
+    new Set([...file.text.matchAll(/^L(\d+)\+ /gm)].map((match) => Number(match[1]))),
+  ]));
   if (!raw || typeof raw !== "object" || !Array.isArray(raw.criteria)) return { ok: false, error: "malformed_output" };
 
   let droppedCitations = 0;
@@ -40,6 +44,7 @@ function validateReport(raw, { criteria, shownDiff }) {
     if (!criteria.some((c) => c.id === id) || byId.has(id)) continue;
 
     const citations = [];
+    let changedCitations = 0;
     for (const cite of Array.isArray(item.citations) ? item.citations.slice(0, 8) : []) {
       const path = clip(cite?.path, 300);
       const start = cite?.startLine;
@@ -47,7 +52,12 @@ function validateReport(raw, { criteria, shownDiff }) {
       const lines = patchLines.get(path);
       const valid = lines && Number.isInteger(start) && Number.isInteger(end) && start >= 1 && end >= start
         && end - start <= 200 && Array.from({ length: end - start + 1 }, (_, offset) => lines.has(start + offset)).every(Boolean);
-      if (valid) citations.push({ path, startLine: start, endLine: end });
+      if (valid) {
+        const added = addedLines.get(path);
+        const touchesChange = Array.from({ length: end - start + 1 }, (_, offset) => added?.has(start + offset)).some(Boolean);
+        citations.push({ path, startLine: start, endLine: end });
+        if (touchesChange) changedCitations += 1;
+      }
       else droppedCitations += 1;
     }
 
@@ -56,6 +66,10 @@ function validateReport(raw, { criteria, shownDiff }) {
     if (status === "supported" && citations.length === 0) {
       status = "needs_verification";
       explanation = `${explanation} (Downgraded: no citation could be verified against the diff.)`.trim();
+    } else if (status === "supported" && changedCitations === 0) {
+      // Unchanged context lines show existing code, not what this PR delivered.
+      status = "needs_verification";
+      explanation = `${explanation} (Downgraded: the cited lines are unchanged context, not code this PR adds or edits.)`.trim();
     }
     byId.set(id, { id, status, explanation, citations });
   }

@@ -22,6 +22,8 @@ const userWindows = new Map();
 const projectWindows = new Map();
 const queues = new Map(); // projectId -> { running: boolean, jobs: [] }
 const queuedPullRequests = new Set();
+const autoReviewWindows = new Map(); // projectId -> timestamps of automatic (webhook) reviews, one-hour window
+const refusalWindows = new Map(); // `${projectId}:${uid}` -> timestamps of saved refusal messages
 // Debounce for automatic (webhook/CI) reviews: rapid pushes to one PR collapse into one job for the newest head.
 const pendingPullRequests = new Map(); // `${projectId}:${prNumber}` -> { timer, headSha, source }
 const latestHeads = new Map(); // `${projectId}:${prNumber}` -> newest head SHA seen from GitHub
@@ -30,12 +32,29 @@ const reviewDebounceMs = () => {
   return Number.isFinite(value) && value >= 0 ? Math.min(value, 60000) : 5000;
 };
 
-function allow(windows, key, limit, now = Date.now()) {
-  const recent = (windows.get(key) || []).filter((t) => now - t < 60000);
+function allow(windows, key, limit, now = Date.now(), windowMs = 60000) {
+  const recent = (windows.get(key) || []).filter((t) => now - t < windowMs);
   if (recent.length >= limit) { windows.set(key, recent); return false; }
   recent.push(now);
   windows.set(key, recent);
+  if (windows.size > 5000) windows.delete(windows.keys().next().value);
   return true;
+}
+// Read-only check of the same windows, for rejecting work before any budget is consumed.
+function wouldAllow(windows, key, limit, now = Date.now(), windowMs = 60000) {
+  return (windows.get(key) || []).filter((t) => now - t < windowMs).length < limit;
+}
+
+// Jobs left queued/running by a previous process will never finish; show them as failed and retryable.
+async function recoverJobs() {
+  try {
+    const result = await ReviewJob.updateMany({ status: { $in: ["queued", "running"] } }, {
+      $set: { status: "failed", errorCode: "restart", error: "The server restarted before this review finished. Retry it." },
+    });
+    if (result.modifiedCount) console.log(`Marked ${result.modifiedCount} interrupted review job(s) as failed.`);
+  } catch (error) {
+    console.error("Could not recover review jobs:", error.message);
+  }
 }
 
 function status() {
@@ -46,6 +65,12 @@ function status() {
 const FAILURE_COPY = {
   not_configured: "The AI agent is not configured for this deployment yet.",
   rate_limited: "The AI service is busy. Please try again in a moment.",
+  ai_auth: "The AI service rejected this deployment's API key. An administrator needs to check ZEROG_API_KEY.",
+  ai_credits: "The AI service has no credits left for this deployment. An administrator needs to top up the 0G account.",
+  ai_bad_request: "The AI service rejected this request. Try a shorter question or a smaller change.",
+  github_rate_limited: "GitHub is rate limiting OpenBounty right now. Try again in a few minutes.",
+  bad_token: "GitHub rejected this deployment's token. An administrator needs to check GITHUB_TOKEN.",
+  forbidden: "GitHub denied access to the repository data this request needs.",
   timeout: "The AI service took too long to respond. Please try again.",
   unreachable: "The AI service is unreachable right now. Please try again later.",
   empty_output: "The AI service returned an empty answer. Please try again.",
@@ -143,7 +168,7 @@ function reviewNotice(project, review, reused) {
   return head + reuse + nl + reasons + nl + nl + owner + ", this needs your attention before it can move forward.";
 }
 
-const KNOWN_REVIEW_ERRORS = ["pr_not_found", "not_found", "private", "no_repo", "rate_limited", "bad_pr", "forbidden", "bad_token"];
+const KNOWN_REVIEW_ERRORS = ["pr_not_found", "not_found", "private", "no_repo", "github_rate_limited", "bad_pr", "forbidden", "bad_token"];
 
 async function recordJob(project, prNumber, fields) {
   try {
@@ -192,7 +217,7 @@ async function runReviewJob({ io, project, message, trigger, config }) {
     }
     console.error("PR review failed:", error.code || "", error.message);
     const known = error instanceof ReviewError || KNOWN_REVIEW_ERRORS.includes(error.code);
-    const text = known && error.code !== "rate_limited" ? error.message : failureText(error);
+    const text = known && !FAILURE_COPY[error.code] ? error.message : failureText(error);
     await recordJob(project, prNumber, { status: "failed", errorCode: error.code || "review_error", error: text.slice(0, 400) });
     await postAgentMessage({
       io, project, trigger: base, role: "reviewer",
@@ -226,7 +251,16 @@ function queuePullRequestReview({ io, project, prNumber, expectedHeadSha, action
   }
   const key = `${prKey}:${expectedHeadSha}:${action === "closed" ? "closed" : "active"}`;
   if (queuedPullRequests.has(key)) return "duplicate";
-  if ((queues.get(project.id)?.jobs.length || 0) >= config.maxQueueDepth) return "busy";
+  if ((queues.get(project.id)?.jobs.length || 0) >= config.maxQueueDepth) {
+    // GitHub does not redeliver a rejected webhook, so make the dropped review visible and retryable.
+    if (source !== "ci") void recordJob(project, prNumber, { status: "failed", source, headSha: expectedHeadSha, errorCode: "busy", error: "The agent had too many pending requests when this PR changed. Retry the review." });
+    return "busy";
+  }
+  // Paid inference started by GitHub events is capped per project, so a burst of PRs cannot drain credits.
+  if (source !== "ci" && !allow(autoReviewWindows, project.id, config.autoReviewsPerHour, Date.now(), 3600000)) {
+    void recordJob(project, prNumber, { status: "failed", source, headSha: expectedHeadSha, errorCode: "auto_limit", error: "The hourly limit for automatic reviews was reached. Retry the review from PR reviews." });
+    return "rate_limited";
+  }
 
   if (pending) {
     clearTimeout(pending.timer);
@@ -266,9 +300,9 @@ function requestReview({ io, project, prNumber, uid, force = false }) {
   if ((queues.get(project.id)?.jobs.length || 0) >= config.maxQueueDepth) {
     return { status: "busy", error: "The agent has too many pending requests. Please try again shortly." };
   }
-  void recordJob(project, prNumber, { status: "queued", source: "retry", errorCode: "", error: "", requestedByUid: uid });
+  void recordJob(project, prNumber, { status: "queued", source: "panel", errorCode: "", error: "", requestedByUid: uid });
   enqueue(project.id, () => runReviewJob({ io, project, config,
-    trigger: { pr: { number: prNumber, force, source: "retry", requestedByUid: uid, notify: true } } }));
+    trigger: { pr: { number: prNumber, force, source: "panel", requestedByUid: uid, notify: true } } }));
   return { status: "queued" };
 }
 
@@ -284,19 +318,33 @@ Rules:
 async function draftCriteria({ io, project, uid, authorName, task, issueNumber }) {
   const config = getAiConfig();
   if (!config.enabled || !config.apiKey) throw new AiError(FAILURE_COPY.not_configured, { code: "not_configured" });
-  if (!allow(userWindows, `${project.id}:${uid}`, config.userRequestsPerMinute)
-    || !allow(projectWindows, project.id, config.projectRequestsPerMinute)) {
+  if ((queues.get(project.id)?.jobs.length || 0) >= config.maxQueueDepth) {
+    throw new AiError("The agent has too many pending requests. Please try again shortly.", { code: "rate_limited" });
+  }
+  if (!wouldAllow(userWindows, `${project.id}:${uid}`, config.userRequestsPerMinute) || !wouldAllow(projectWindows, project.id, config.projectRequestsPerMinute)) {
     throw new AiError("Too many agent requests. Please wait a minute and try again.", { code: "rate_limited" });
   }
   let issue = null;
   if (issueNumber && project.githubRepository?.fullName) {
-    issue = await fetchIssue(project.githubRepository.fullName, issueNumber).catch(() => null);
-    if (!issue) throw new AiError(`Issue #${issueNumber} could not be read from ${project.githubRepository.fullName}.`, { code: "issue_not_found" });
+    try {
+      issue = await fetchIssue(project.githubRepository.fullName, issueNumber);
+    } catch (error) {
+      if (error.code === "github_rate_limited") throw new AiError(FAILURE_COPY.github_rate_limited, { code: "github_rate_limited" });
+      throw new AiError(`Issue #${issueNumber} could not be read from ${project.githubRepository.fullName}.`, { code: "issue_not_found" });
+    }
   }
   const question = [String(task || "").slice(0, 2000), issue && `Issue #${issue.number}: ${issue.title}\n${issue.body}`]
     .filter(Boolean).join("\n\n");
   if (!question.trim()) throw new AiError("Describe the task or choose an issue to draft criteria.", { code: "empty_question" });
 
+  // Only a request that will really run consumes rate budget.
+  allow(userWindows, `${project.id}:${uid}`, config.userRequestsPerMinute);
+  allow(projectWindows, project.id, config.projectRequestsPerMinute);
+  // One 0G job at a time per project, like chat commands and reviews.
+  return enqueueAndWait(project.id, () => runDraft({ io, project, question, config, issue, authorName }));
+}
+
+async function runDraft({ io, project, question, config, issue, authorName }) {
   setWorking(io, project, true, "scope");
   try {
     const context = await buildContext({ project, question, config });
@@ -326,6 +374,15 @@ async function draftCriteria({ io, project, uid, authorName, task, issueNumber }
   } finally {
     setWorking(io, project, false);
   }
+}
+
+// Runs `fn` through the project's queue (one 0G job at a time) and resolves with its result.
+function enqueueAndWait(projectId, fn) {
+  return new Promise((resolve, reject) => {
+    enqueue(projectId, async () => {
+      try { resolve(await fn()); } catch (error) { reject(error); }
+    });
+  });
 }
 
 function enqueue(projectId, job) {
@@ -358,33 +415,38 @@ async function handleMessage({ io, project, message }) {
   if (!trigger) return;
 
   const base = { id: message.id, body: message.body, authorName: message.authorName };
-  const refuse = (body, errorCode) => postAgentMessage({
-    io, project, trigger: base, role: trigger.role, body, ai: { status: "error", errorCode },
-  });
+  // Refusals are chat messages too; cap them per user so refused requests cannot flood the thread.
+  const refuse = async (body, errorCode) => {
+    if (!allow(refusalWindows, `${project.id}:${message.authorUid}`, 5)) return;
+    await postAgentMessage({ io, project, trigger: base, role: trigger.role, body, ai: { status: "error", errorCode } });
+  };
 
   if (trigger.kind === "setcriteria") return void await handleSetCriteria({ io, project, message, trigger });
   if (trigger.pr?.repo && trigger.pr.repo.toLowerCase() !== (project.githubRepository?.fullName || "").toLowerCase()) {
     return void await refuse("That pull request belongs to a different repository than this project's (" + (project.githubRepository?.fullName || "none") + ").", "wrong_repo");
   }
   if (!trigger.question) {
-    return void await postAgentMessage({
-      io, project, trigger: base, role: trigger.role,
-      body: "Add a question after the command, for example `/explain how does chat work?`.",
-      ai: { status: "error", errorCode: "empty_question" },
-    });
+    return void await refuse("Add a question after the command, for example `/explain how does chat work?`.", "empty_question");
   }
-  if (!allow(userWindows, `${project.id}:${message.authorUid}`, config.userRequestsPerMinute)
-    || !allow(projectWindows, project.id, config.projectRequestsPerMinute)) {
-    return void await refuse("You are asking the agent too quickly. Please wait a minute and try again.", "rate_limited");
+  // A review needs a pull request; without one there is nothing to inspect, so no model call is made.
+  if (trigger.role === "reviewer" && !trigger.pr) {
+    return void await refuse("Tell me which pull request to review, for example `/review 12` or `/review #12 force`.", "no_pr");
   }
+  // Reject before consuming any budget: a refused request must not use up the sender's rate allowance.
   const queue = queues.get(project.id);
   if (queue && queue.jobs.length >= config.maxQueueDepth) {
     return void await refuse("The agent has too many pending requests. Please try again shortly.", "queue_full");
   }
+  const userKey = `${project.id}:${message.authorUid}`;
+  if (!wouldAllow(userWindows, userKey, config.userRequestsPerMinute) || !wouldAllow(projectWindows, project.id, config.projectRequestsPerMinute)) {
+    return void await refuse("You are asking the agent too quickly. Please wait a minute and try again.", "rate_limited");
+  }
+  allow(userWindows, userKey, config.userRequestsPerMinute);
+  allow(projectWindows, project.id, config.projectRequestsPerMinute);
   const job = trigger.role === "reviewer" && trigger.pr ? runReviewJob : runJob;
   enqueue(project.id, () => job({ io, project, message, trigger, config }));
 }
 
 module.exports = {
-  handleMessage, queuePullRequestReview, requestReview, draftCriteria, criteriaApprovedText, postAgentMessage, status, COMMANDS,
+  handleMessage, queuePullRequestReview, requestReview, recoverJobs, draftCriteria, criteriaApprovedText, postAgentMessage, status, COMMANDS,
 };

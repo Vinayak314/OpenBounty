@@ -19,7 +19,10 @@ const KEYS = [
   "0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a", // attestation signer
 ];
 const artifact = (name) => JSON.parse(fs.readFileSync(path.join(CONTRACTS, `artifacts/contracts/${name === "MockUSDT" ? "mocks/" : ""}${name}.sol/${name}.json`), "utf8"));
-const haveArtifacts = fs.existsSync(path.join(CONTRACTS, "artifacts/contracts/OpenBountyAccountFactory.sol"));
+// Compile the contracts when needed instead of silently skipping: a skipped payment test hides regressions.
+if (!fs.existsSync(path.join(CONTRACTS, "artifacts/contracts/OpenBountyAccountFactory.sol"))) {
+  require("node:child_process").execSync("npx hardhat compile", { cwd: CONTRACTS, stdio: "ignore" });
+}
 
 const gh = { pr: null };
 function stubGithub() {
@@ -41,7 +44,7 @@ async function waitForRpc(provider) {
   throw new Error("Hardhat node did not start.");
 }
 
-test("passkey accounts fund, claim, submit and settle a bounty with sponsored gas", { skip: !haveArtifacts && "compile ../contracts first", timeout: 240000 }, async (t) => {
+test("passkey accounts fund, claim, submit and settle a bounty with sponsored gas", { timeout: 240000 }, async (t) => {
   const node = spawn("npx", ["hardhat", "node", "--port", String(PORT)], { cwd: CONTRACTS, stdio: "ignore" });
   t.after(() => node.kill());
   const { MongoMemoryServer } = require("mongodb-memory-server");
@@ -72,7 +75,7 @@ test("passkey accounts fund, claim, submit and settle a bounty with sponsored ga
     WHITECHAIN_RPC_URL: RPC, WHITECHAIN_CHAIN_ID: "31337", ESCROW_ADDRESS: await escrow.getAddress(),
     ACCOUNT_FACTORY_ADDRESS: await factory.getAddress(), USDT_ADDRESS: await usdt.getAddress(),
     SPONSOR_PRIVATE_KEY: KEYS[1], ATTESTATION_PRIVATE_KEY: KEYS[2], WEBAUTHN_RP_ID: "localhost",
-    WEBAUTHN_ORIGINS: "http://localhost:5173", PAYMENTS_ENABLED: "true", INDEXER_POLL_MS: "100000",
+    WEBAUTHN_ORIGINS: "http://localhost:5173", PAYMENTS_ENABLED: "true", INDEXER_POLL_MS: "100000", INDEXER_CONFIRMATIONS: "0",
   });
   stubGithub();
 
@@ -87,8 +90,8 @@ test("passkey accounts fund, claim, submit and settle a bounty with sponsored ga
   const permissions = require("../services/bounties/permissions");
   const indexer = require("../services/chain/indexer");
 
-  const owner = await User.create({ firebaseUid: "owner-uid", displayName: "Olive Owner", github: { username: "olive" } });
-  const contrib = await User.create({ firebaseUid: "contrib-uid", displayName: "Cody Contributor", github: { username: "cody" } });
+  const owner = await User.create({ firebaseUid: "owner-uid", displayName: "Olive Owner", github: { id: "1001", username: "olive" } });
+  const contrib = await User.create({ firebaseUid: "contrib-uid", displayName: "Cody Contributor", github: { id: "1002", username: "cody" } });
 
   async function setup(user, key) {
     const options = await wallet.registrationOptions(user);
@@ -134,7 +137,7 @@ test("passkey accounts fund, claim, submit and settle a bounty with sponsored ga
   await assert.rejects(svc.updateDraft({ project, uid: "owner-uid", number: draft.number, input: { amount: "1" } }), /locked/);
 
   // Claim request -> owner accepts (binds recipient).
-  await assert.rejects(svc.requestClaim({ project, uid: "owner-uid", number: draft.number }), /funded this bounty/);
+  await assert.rejects(svc.requestClaim({ project, uid: "owner-uid", number: draft.number }), /cannot claim/);
   const requested = await svc.requestClaim({ project, uid: "contrib-uid", number: draft.number, message: "On it" });
   const requestId = String(requested.claimRequests[0]._id);
   await sign(owner, ownerKey, await svc.prepareAccept({ project, uid: "owner-uid", number: draft.number, requestId }));
@@ -143,10 +146,13 @@ test("passkey accounts fund, claim, submit and settle a bounty with sponsored ga
   assert.equal(bounty.chain.recipient, contribUser.wallet.address);
 
   // Submission: PR author must be the claimant; backend attests and the sponsor relays.
-  gh.pr = { number: 7, head: { sha: "ab".repeat(20) }, merged: false, state: "open", draft: false, user: { login: "mallory" },
+  gh.pr = { number: 7, head: { sha: "ab".repeat(20) }, merged: false, state: "open", draft: true, user: { login: "mallory", id: 666 },
     html_url: "https://github.com/acme/web/pull/7", title: "Fix", base: { repo: { full_name: "acme/web", private: false } } };
   await assert.rejects(svc.submitPullRequest({ project, uid: "contrib-uid", number: draft.number, prNumber: 7 }), /not by the claimant/);
-  gh.pr.user.login = "cody";
+  gh.pr.user = { login: "cody", id: 1002 };
+  // A draft PR cannot be registered (it would freeze the bounty), and a maintainer cannot claim.
+  await assert.rejects(svc.submitPullRequest({ project, uid: "contrib-uid", number: draft.number, prNumber: 7 }), /ready for review/);
+  gh.pr.draft = false;
   let queued = null;
   await svc.submitPullRequest({ project, uid: "contrib-uid", number: draft.number, prNumber: 7, queueReview: (args) => { queued = args; } });
   assert.equal(queued.prNumber, 7);
@@ -190,7 +196,7 @@ test("passkey accounts fund, claim, submit and settle a bounty with sponsored ga
 
   // Owner grants a co-owner maintainer + payout permissions on chain (one passkey approval).
   const coKey = makePasskey();
-  const co = await User.create({ firebaseUid: "co-uid", displayName: "Cam Coowner", github: { username: "cam" } });
+  const co = await User.create({ firebaseUid: "co-uid", displayName: "Cam Coowner", github: { id: "1003", username: "cam" } });
   const coUser = await setup(co, coKey);
   project.coOwners = [co._id];
   await project.save();
@@ -221,8 +227,47 @@ test("passkey accounts fund, claim, submit and settle a bounty with sponsored ga
   assert.equal((await Bounty.findById(third._id)).status, "refunded");
   assert.equal(await usdt.balanceOf(ownerAccount), parseUnits("25", 6)); // 50 - 25 paid; 10 and 5 came back
 
+  // ---- Regression checks for fixed bugs ----
+  // Malformed bounty numbers are a 400, not a cast error.
+  await assert.rejects(svc.findBounty(project, "abc"), (error) => error.status === 400);
+  // Oversized or non-text input is rejected, not truncated or coerced.
+  const okInput = { title: "T", amount: "5", submissionDeadline: deadline, criteria: ["Do it"] };
+  await assert.rejects(svc.createDraft({ project, uid: "owner-uid", name: "O", input: { ...okInput, title: "x".repeat(5000) } }), /200 characters/);
+  await assert.rejects(svc.createDraft({ project, uid: "owner-uid", name: "O", input: { ...okInput, criteria: [{ a: 1 }] } }), /list of text/);
+  // One PR backs at most one bounty.
+  const fourth = await svc.createDraft({ project, uid: "owner-uid", name: "Olive", input: { ...okInput, title: "Fourth" } });
+  await sign(owner, ownerKey, await svc.prepareFund({ project, uid: "owner-uid", number: fourth.number }));
+  const req4 = await svc.requestClaim({ project, uid: "contrib-uid", number: fourth.number });
+  await sign(owner, ownerKey, await svc.prepareAccept({ project, uid: "owner-uid", number: fourth.number, requestId: String(req4.claimRequests[0]._id) }));
+  await assert.rejects(svc.submitPullRequest({ project, uid: "contrib-uid", number: fourth.number, prNumber: 7 }), /already registered for another bounty/);
+  // Maintainers cannot claim bounties they manage, even by calling the API directly.
+  await assert.rejects(svc.requestClaim({ project, uid: "co-uid", number: fourth.number }), /cannot claim/);
+  // A funded bounty's terms are locked: the draft editor refuses, and funding twice is blocked.
+  await assert.rejects(svc.updateDraft({ project, uid: "owner-uid", number: fourth.number, input: { amount: "1" } }), /locked/);
+
+  // The sponsor limit holds under a concurrent burst: only 2 of 8 simultaneous requests are sponsored.
+  const sponsorSvc = require("../services/chain/sponsor");
+  const { Interface } = require("ethers");
+  const factoryIface = new Interface(["function createAccount(bytes32 qx, bytes32 qy) returns (address)"]);
+  const limits = require("../services/chain/client").chain().config.sponsor; // config is cached per process
+  const originalLimit = limits.userTxPerHour;
+  limits.userTxPerHour = 2;
+  const burst = await Promise.allSettled(Array.from({ length: 8 }, () => {
+    const key = makePasskey();
+    return sponsorSvc.sendSponsored({ userUid: "burst-user", kind: "create_account", to: process.env.ACCOUNT_FACTORY_ADDRESS,
+      data: factoryIface.encodeFunctionData("createAccount", [key.qx, key.qy]) });
+  }));
+  limits.userTxPerHour = originalLimit;
+  assert.equal(burst.filter((result) => result.status === "fulfilled").length, 2);
+  assert.ok(burst.filter((result) => result.status === "rejected").every((result) => result.reason.code === "sponsor_rate_limited"));
+  // Sponsor details are not exposed in the public status.
+  const publicStatus = await sponsorSvc.status();
+  assert.equal(publicStatus.address, undefined);
+  assert.equal(publicStatus.balanceWei, undefined);
+
   // Every sponsored transaction is recorded for limits and budget.
   const kinds = (await SponsoredTx.find().lean()).map((tx) => tx.kind);
   for (const kind of ["create_account", "fund", "accept_claim", "register_submission", "settle"]) assert.ok(kinds.includes(kind), kind);
   assert.ok((await SponsoredTx.find().lean()).every((tx) => tx.status === "confirmed"));
+  assert.ok((await SponsoredTx.find().lean()).every((tx) => BigInt(tx.costWei) > 0n), "reserved worst-case cost is replaced by the real cost");
 });
