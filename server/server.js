@@ -80,6 +80,11 @@ app.get("/api/health", (_req, res) => {
   res.status(ready ? 200 : 503).json({ ready });
 });
 app.use("/api/me", meRouter);
+// Bounty and payment routes are mounted first so their requests skip the generic project router.
+const { bounties: bountiesRouter, payments: paymentsRouter } = require("./routes/bounties");
+app.use("/api/projects/:slug/bounties", bountiesRouter);
+app.use("/api/projects/:slug/payments", paymentsRouter);
+app.use("/api/wallet", require("./routes/wallet"));
 app.use("/api/projects", projectsRouter);
 app.use("/api/groups", groupsRouter);
 app.use("/api/demo/0g", require("./routes/reviewDemo"));
@@ -103,6 +108,16 @@ async function start() {
 
   await mongoose.connect(process.env.MONGODB_URI);
   httpServer.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
+  // Payments: workflow notices go to project chats; the indexer mirrors escrow events into MongoDB.
+  require("./services/bounties/notify").setIo(io);
+  try {
+    const { getChainConfig } = require("./config/chain");
+    const config = getChainConfig();
+    if (config.escrow) require("./services/chain/indexer").start();
+    console.log(config.enabled ? `Payments enabled on ${config.networkName} (escrow ${config.escrow}).` : "Payments disabled: set ESCROW_ADDRESS, ACCOUNT_FACTORY_ADDRESS, SPONSOR_PRIVATE_KEY and ATTESTATION_PRIVATE_KEY.");
+  } catch (error) {
+    console.error("Payments could not start:", error.message);
+  }
 }
 
 start().catch((error) => {

@@ -15,6 +15,7 @@ const { isProjectMaintainer } = require("../projectAccess");
 const { publishReview, publishReviewFailure } = require("../review/publish");
 const { parseCriteria, approveCriteria, normalizeTexts, CriteriaError, MAX_ITEMS, MAX_LENGTH } = require("../criteria");
 const { fetchIssue } = require("../github");
+const { hasReviewCriteria } = require("../review/criteriaSource");
 
 // In-memory limits are enough for a single-process MVP; move to Redis/Mongo if the API scales out.
 const userWindows = new Map();
@@ -239,7 +240,7 @@ function queuePullRequestReview({ io, project, prNumber, expectedHeadSha, action
       try {
         if (latestHeads.has(prKey) && latestHeads.get(prKey) !== expectedHeadSha) return;
         const current = await Project.findById(project._id).populate("owner", "displayName");
-        if (current?.status !== "active" || !current.criteria?.items?.length) return;
+        if (current?.status !== "active" || !(await hasReviewCriteria(current, prNumber))) return;
         if (current.githubRepository.fullName !== project.githubRepository.fullName) return;
         await runReviewJob({ io, project: current, config,
           trigger: { pr: { number: prNumber, expectedHeadSha, source } } });

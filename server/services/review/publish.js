@@ -1,6 +1,6 @@
 const { createHash } = require("node:crypto");
 const Review = require("../../models/Review");
-const Project = require("../../models/Project");
+const { criteriaStillCurrent } = require("./criteriaSource");
 const { fetchPullRequestHead, reviewRepositoryEnabled, upsertReviewComment } = require("../github");
 const { VERDICTS } = require("./validate");
 
@@ -50,8 +50,7 @@ async function publishReview(project, review) {
   try {
     const [head, current] = await Promise.all([
       fetchPullRequestHead(repo, review.prNumber),
-      Project.exists({ _id: project._id, status: "active", "githubRepository.fullName": repo,
-        "criteria.hash": review.criteriaHash, "criteria.version": review.criteriaVersion }),
+      criteriaStillCurrent(project, review),
     ]);
     if (!current || head.headSha !== review.headSha || head.state !== review.prState) {
       review.status = "stale";

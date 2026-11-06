@@ -3,10 +3,11 @@
 Solidity escrow for OpenBounty bounties on **Whitechain Sepolia** (chain `1874`), paying out the designated
 test USDT. Built with Hardhat (the toolchain already used in this folder), Solidity `0.8.28`, OpenZeppelin 5.
 
-> **Status (honest summary).** The contract compiles and passes its local test suite (72 tests).
-> It has **not** been deployed, **not** verified on the explorer, **not** audited, and the gasless/sponsored
-> provider is **not** chosen. Deployed addresses below are placeholders. Product docs in this repo describe planned
-> behaviour; this folder is the only part of the payment flow that exists as code.
+> **Status (honest summary).** The escrow and the passkey account contracts compile and pass the local suite
+> (`npx hardhat test`, including tests that drive them with the backend's own signing/encoding modules).
+> Gasless execution is implemented with our own passkey smart accounts plus the OpenBounty gas sponsor (see the root
+> README). The contracts have **not** been deployed, **not** verified on the explorer and **not** audited; deployed
+> addresses below are placeholders until the team deploys.
 
 | Item | Value |
 |---|---|
@@ -26,11 +27,16 @@ it does not guarantee fair review or code quality. (The team-owned root README n
 ## Layout
 
 ```
-contracts/BountyEscrow.sol          the escrow (the only production contract)
+contracts/BountyEscrow.sol          the escrow
+contracts/OpenBountyAccount.sol     passkey (WebAuthn/P-256) smart account: no seed phrase, gas paid by a relayer
+contracts/OpenBountyAccountFactory.sol  CREATE2 factory: one account per passkey public key
 contracts/interfaces/IERC3009.sol   receiveWithAuthorization interface used for gasless funding
 contracts/mocks/                    LOCAL TEST ONLY: MockUSDT, fee-on-transfer, reentrant token, ERC-1271 account
-test/BountyEscrow.js, test/helpers.js   72 tests; helpers hold the EIP-712 type definitions a backend should mirror
-scripts/deploy.js                   deployment script (env-driven, guards chain id and token)
+test/BountyEscrow.js, test/helpers.js   escrow tests; helpers hold the EIP-712 type definitions a backend should mirror
+scripts/deploy.js                   escrow deployment script (env-driven, guards chain id and token)
+scripts/deployAccountFactory.js     passkey account factory deployment (deploy this first)
+scripts/transferOwnership.js        start a two-step escrow ownership transfer to a passkey account
+test/PasskeyAccount.js, test/webauthn.js  passkey accounts end to end with the backend's encoders and a test authenticator
 .env.example                        variables read by hardhat.config.js / deploy.js (no secrets committed)
 ```
 
@@ -40,14 +46,17 @@ scripts/deploy.js                   deployment script (env-driven, guards chain 
 cd contracts
 npm install
 npx hardhat compile
-npx hardhat test          # 72 passing
+npx hardhat test          # 136 passing (escrow + passkey accounts)
 ```
 
 Deploy (test key only, never commit `.env`):
 
 ```bash
-cp .env.example .env      # fill PRIVATE_KEY (funded with test WBT), OWNER_ADDRESS, ATTESTATION_SIGNER_ADDRESS
-npx hardhat run scripts/deploy.js --network whitechainSepolia
+cp .env.example .env      # fill PRIVATE_KEY (funded with test WBT)
+npx hardhat run scripts/deployAccountFactory.js --network whitechainSepolia
+# create the project owner's passkey account in the app, then:
+OWNER_ADDRESS=<owner passkey account> ATTESTATION_SIGNER_ADDRESS=<backend attestation address> \
+  npx hardhat run scripts/deploy.js --network whitechainSepolia
 ```
 
 The script refuses to run on any chain other than `1874` or a local network, refuses any token other than the
@@ -160,7 +169,7 @@ own `DOMAIN_SEPARATOR()`; do not rely on `version()` (it reverts on the live tok
 
 ## What was verified, and how
 
-* `npx hardhat compile` and `npx hardhat test`: 72 passing against local mocks. Quick mutation checks (removing
+* `npx hardhat compile` and `npx hardhat test`: 136 passing against local mocks (escrow and passkey accounts). Quick mutation checks (removing
   `nonReentrant` on `settle`, the recipient/amount/criteria check, signature verification, the `Paid` status write) each
   made tests fail, so the suite is not vacuous.
 * Read-only checks against the live Whitechain Sepolia RPC (no transactions sent):
@@ -202,19 +211,38 @@ and approve payouts to the claimant a maintainer accepted. The owner cannot redi
 * Fee-on-transfer/rebasing tokens are rejected at funding (received amount must equal `amount`).
 * **Verified recipient wallet is off chain.** The maintainer signs the recipient; wallet-ownership proof is a backend step.
   Self-payment is blocked per account, which is not Sybil resistance.
-* **Gasless/sponsored UX is unresolved.** The contract supports signature-based authorization, ERC-1271 accounts and
-  EIP-3009 funding, which are the building blocks. The embedded wallet/smart-account provider, paymaster/relayer, its
-  allowlists and rate limits, and how token approval is sponsored remain to be built and proven on chain 1874 before any
-  "gasless" claim. `fund` by a smart account still needs an `approve`; the 3009 path avoids it.
+* **Gasless execution is ours, not a third-party provider.** Users hold `OpenBountyAccount`s controlled by a passkey.
+  The OpenBounty sponsor submits `execute(calls, deadline, webauthnSignature)` and pays WBT; the account verifies the
+  assertion (OpenZeppelin `WebAuthn`, user verification required) over an EIP-712 digest of the exact calls, its nonce and a
+  deadline of at most 1 hour. `approve` + `fund` run in one batch, so token approval is sponsored too. The escrow sees the
+  account as `msg.sender` (self-authenticating `Auth`), and other parties' consent (e.g. a claimant agreeing to cancel)
+  arrives as ERC-1271 signatures. Whitechain Sepolia answered the RIP-7212 P-256 precompile in an `eth_call` probe, so
+  verification uses the precompile there; locally the Solidity fallback costs about 450k to 860k gas per `execute`.
+  Not yet exercised on the live network.
 * No pause switch, no upgradeability, no native-token handling (ETH sent by mistake reverts; tokens sent directly to the
   contract are unrecoverable by design).
 * Not audited. Tests are local only; no fuzz/invariant campaign or formal verification yet.
 * Time rules use `block.timestamp`. Claim windows and deadlines are not adjusted for sequencer clock skew.
 
+## Passkey accounts
+
+| Contract | Role |
+|---|---|
+| `OpenBountyAccountFactory.createAccount(qx, qy)` | Permissionless, idempotent CREATE2 deploy; `accountAddress(qx, qy)` predicts the address. Rejects invalid P-256 keys. |
+| `OpenBountyAccount.execute(calls, deadline, sig)` | Runs a batch if `sig` is a WebAuthn assertion (UP+UV) whose challenge is `executeDigest(calls, nonce, deadline)`. Bubbles inner reverts as `CallFailed(index, reason)`. |
+| `OpenBountyAccount.isValidSignature(hash, sig)` | ERC-1271 over the same passkey; used for off-chain consents the escrow verifies. |
+
+EIP-712 domain `{name: "OpenBountyAccount", version: "1", chainId, verifyingContract: <account>}`; types
+`Execute(Call[] calls,uint256 nonce,uint256 deadline)Call(address target,uint256 value,bytes data)`. The signature is
+`abi.encode(WebAuthn.WebAuthnAuth)` with low-s normalized `r, s`. The backend mirror lives in `server/services/chain/`.
+
+No owner, upgrade or recovery path: losing the passkey loses the account.
+
 ## Deployed addresses
 
 | Network | Contract | Address | Tx / explorer link | Verified |
 |---|---|---|---|---|
+| Whitechain Sepolia (1874) | `OpenBountyAccountFactory` | `TBD` | `TBD` | no |
 | Whitechain Sepolia (1874) | `BountyEscrow` | `TBD` | `TBD` | no |
 | Whitechain Sepolia (1874) | USDT (designated, external) | `0xcedfB56113143d55b2358b8CFbB0dEB5Ad2f55a7` | [explorer](https://explorer.testnet.whitechain.io/address/0xcedfB56113143d55b2358b8CFbB0dEB5Ad2f55a7) | n/a |
 

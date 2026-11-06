@@ -1,15 +1,14 @@
 const crypto = require("node:crypto");
 const express = require("express");
 const mongoose = require("mongoose");
-const { getAddress, verifyMessage } = require("ethers");
 const User = require("../models/User");
 const Project = require("../models/Project");
 const Group = require("../models/Group");
+const Bounty = require("../models/Bounty");
 const { requireFirebaseUser } = require("../middleware/requireFirebaseUser");
 const { getOrCreateUser } = require("../services/users");
 
 const router = express.Router();
-const BASE_CHAIN_ID = 8453;
 
 router.use(requireFirebaseUser);
 
@@ -30,6 +29,8 @@ function userResponse(user) {
     wallet: user.wallet?.address ? {
       address: user.wallet.address,
       chainId: user.wallet.chainId,
+      kind: user.wallet.kind || "",
+      deployed: Boolean(user.wallet.deployed),
       connectedAt: user.wallet.connectedAt,
     } : null,
     groups: user.groups,
@@ -173,105 +174,20 @@ router.post("/projects", async (req, res) => {
   }
 });
 
-router.post("/wallet/challenge", async (req, res) => {
-  if (!ensureDatabase(res)) return;
-  const { address, chainId } = req.body || {};
-  if (Number(chainId) !== BASE_CHAIN_ID) return res.status(400).json({ error: "Switch MetaMask to Base before connecting." });
-
-  let normalizedAddress;
-  try {
-    normalizedAddress = getAddress(address).toLowerCase();
-  } catch {
-    return res.status(400).json({ error: "A valid Ethereum wallet address is required." });
-  }
-
-  try {
-    const user = await getOrCreateUser(req.firebaseUser);
-    const nonce = crypto.randomBytes(24).toString("hex");
-    const issuedAt = new Date();
-    const expiresAt = new Date(issuedAt.getTime() + 5 * 60 * 1000);
-    const message = [
-      "OpenBounty wallet connection",
-      `Firebase user: ${user.firebaseUid}`,
-      `Wallet: ${normalizedAddress}`,
-      `Chain ID: ${BASE_CHAIN_ID}`,
-      `Nonce: ${nonce}`,
-      `Issued at: ${issuedAt.toISOString()}`,
-      `Expires at: ${expiresAt.toISOString()}`,
-    ].join("\n");
-    user.wallet.challengeMessage = message;
-    user.wallet.challengeExpiresAt = expiresAt;
-    await user.save();
-    res.json({ message });
-  } catch (error) {
-    console.error("Could not create wallet challenge:", error.message);
-    res.status(500).json({ error: "Could not start wallet verification." });
-  }
-});
-
-router.post("/wallet/verify", async (req, res) => {
-  if (!ensureDatabase(res)) return;
-  const { address, chainId, signature } = req.body || {};
-  if (Number(chainId) !== BASE_CHAIN_ID || typeof signature !== "string") {
-    return res.status(400).json({ error: "A Base wallet signature is required." });
-  }
-
-  let normalizedAddress;
-  try {
-    normalizedAddress = getAddress(address).toLowerCase();
-  } catch {
-    return res.status(400).json({ error: "A valid Ethereum wallet address is required." });
-  }
-
-  try {
-    const user = await User.findOne({ firebaseUid: req.firebaseUser.uid });
-    const message = user?.wallet?.challengeMessage;
-    const expiresAt = user?.wallet?.challengeExpiresAt;
-    if (!message || !expiresAt || expiresAt <= new Date() || !message.includes(`Wallet: ${normalizedAddress}`)) {
-      return res.status(400).json({ error: "Wallet verification expired. Start the connection again." });
-    }
-
-    let signerAddress;
-    try {
-      signerAddress = verifyMessage(message, signature).toLowerCase();
-    } catch {
-      return res.status(400).json({ error: "MetaMask returned an invalid signature." });
-    }
-    if (signerAddress !== normalizedAddress) return res.status(400).json({ error: "The signature does not match this wallet." });
-
-    const linkedUser = await User.findOneAndUpdate(
-      {
-        _id: user._id,
-        "wallet.challengeMessage": message,
-        "wallet.challengeExpiresAt": { $gt: new Date() },
-      },
-      { $set: {
-        "wallet.address": normalizedAddress,
-        "wallet.chainId": BASE_CHAIN_ID,
-        "wallet.connectedAt": new Date(),
-        "wallet.challengeMessage": "",
-        "wallet.challengeExpiresAt": null,
-      } },
-      { returnDocument: "after", runValidators: true },
-    );
-    if (!linkedUser) return res.status(400).json({ error: "Wallet verification expired or was already used. Start again." });
-    res.json({ wallet: userResponse(linkedUser).wallet });
-  } catch (error) {
-    if (error.code === 11000) return res.status(409).json({ error: "That wallet is already linked to another account." });
-    console.error("Could not verify wallet:", error.message);
-    res.status(500).json({ error: "Could not verify your wallet." });
-  }
-});
-
 router.delete("/wallet", async (req, res) => {
   if (!ensureDatabase(res)) return;
   try {
     const user = await getOrCreateUser(req.firebaseUser);
-    user.wallet.address = "";
-    user.wallet.chainId = null;
-    user.wallet.connectedAt = null;
-    user.wallet.challengeMessage = "";
-    user.wallet.challengeExpiresAt = null;
+    const address = user.wallet?.address || "";
+    if (address) {
+      // A bound recipient or funder account must stay linked while money depends on it.
+      const active = await Bounty.exists({
+        status: { $in: ["funding", "funded", "claimed", "submitted"] },
+        $or: [{ "chain.recipient": address }, { "chain.funder": address }, { claimRequests: { $elemMatch: { account: address, status: "pending" } } }],
+      });
+      if (active) return res.status(409).json({ error: "This account is part of an active bounty. Finish or cancel it first." });
+    }
+    user.wallet = { address: "", chainId: null, kind: "", connectedAt: null, passkey: {}, deployTx: "", deployed: false, challengeMessage: "", challengeExpiresAt: null };
     await user.save();
     res.json({ wallet: null });
   } catch (error) {

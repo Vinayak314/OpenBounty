@@ -1,6 +1,6 @@
 const crypto = require("node:crypto");
 const Review = require("../../models/Review");
-const Project = require("../../models/Project");
+const { criteriaForPr, criteriaStillCurrent } = require("./criteriaSource");
 const { getAiConfig } = require("../../config/ai");
 const { chatCompletion } = require("../ai/zeroG");
 const { POLICY, neutralize } = require("../ai/prompts");
@@ -98,9 +98,11 @@ async function reviewPullRequest({ project, prNumber, requestedByUid, expectedHe
     throw new ReviewError(`PR #${prNumber} has a newer commit.`, "stale");
   }
   if (expectedHeadSha && pr.draft) throw new ReviewError("Draft pull requests are reviewed when marked ready.", "draft");
-  const criteria = project.criteria?.items?.map((c) => ({ id: c.id, text: c.text })) || [];
-  const criteriaHash = project.criteria?.hash || "";
-  const criteriaVersion = project.criteria?.version || 0;
+  const source = await criteriaForPr(project, prNumber);
+  const criteria = source.items;
+  const criteriaHash = source.hash;
+  const criteriaVersion = source.version;
+  const bountyRef = source.bounty?._id || null;
   const hasCriteria = criteria.length > 0;
 
   await Review.updateMany({
@@ -109,7 +111,7 @@ async function reviewPullRequest({ project, prNumber, requestedByUid, expectedHe
 
   // Reuse the stored report for this exact commit + criteria version. Only CI and PR state are refreshed (no inference).
   if (!force && hasCriteria) {
-    const existing = await Review.findOne({ project: project._id, prNumber, headSha: pr.headSha, criteriaHash, criteriaVersion, status: "complete" }).sort({ _id: -1 });
+    const existing = await Review.findOne({ project: project._id, prNumber, headSha: pr.headSha, criteriaHash, criteriaVersion, bounty: bountyRef, status: "complete" }).sort({ _id: -1 });
     if (existing) {
       const { verdict, reasons } = decideVerdict({
         results: existing.results, ci: pr.ci, pr, diffTruncated: existing.diffTruncated,
@@ -126,20 +128,20 @@ async function reviewPullRequest({ project, prNumber, requestedByUid, expectedHe
   const evidence = await evaluateReview({ pr, criteria, config, issues });
 
   // The PR may have moved while the model was working; never publish a report for an old head as current.
-  const [head, currentProject] = await Promise.all([
+  const [head, stillCurrent] = await Promise.all([
     fetchPullRequestHead(repo, prNumber),
-    Project.findById(project._id).select("criteria.hash criteria.version githubRepository.fullName status"),
+    criteriaStillCurrent(project, { bounty: bountyRef, criteriaHash, criteriaVersion }),
   ]);
   if (head.headSha !== pr.headSha || head.state !== pr.state) {
     throw new ReviewError(`PR #${prNumber} was updated while it was being reviewed. Run the review again for the new commit.`, "stale");
   }
-  if (!currentProject || currentProject.status !== "active" || currentProject.githubRepository.fullName !== repo
-    || (currentProject.criteria?.hash || "") !== criteriaHash || (currentProject.criteria?.version || 0) !== criteriaVersion) {
+  if (!stillCurrent) {
     throw new ReviewError("Project criteria or review settings changed. Run a fresh review.", "stale");
   }
 
+
   const review = await Review.create({
-    project: project._id, ...mapPr(pr), ...evidence,
+    project: project._id, bounty: bountyRef, ...mapPr(pr), ...evidence,
     criteriaHash, criteriaVersion,
     reportHash: hashReport({ sha: pr.headSha, criteriaHash, results: evidence.results, verdict: evidence.verdict }),
     requestedByUid,

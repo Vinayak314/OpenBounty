@@ -281,7 +281,12 @@ async function fetchPullRequest(fullName, number) {
 // Cheap freshness probe used right before publishing a review.
 async function fetchPullRequestHead(fullName, number) {
   const pr = await api(`/repos/${fullName}/pulls/${number}`);
-  return { headSha: pr.head?.sha, state: pr.merged ? "merged" : pr.state };
+  return {
+    headSha: pr.head?.sha, state: pr.merged ? "merged" : pr.state, draft: Boolean(pr.draft),
+    author: pr.user?.login || "", authorId: pr.user?.id || null, url: pr.html_url || "", title: String(pr.title || "").slice(0, 300),
+    mergeCommitSha: pr.merged ? pr.merge_commit_sha || "" : "", mergedAt: pr.merged_at || null,
+    baseRepo: pr.base?.repo?.full_name || "",
+  };
 }
 
 // Issue numbers a PR body links with GitHub closing keywords ("Fixes #12", "closes owner/repo#12"), same repo only.

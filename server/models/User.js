@@ -13,10 +13,20 @@ const UserSchema = new mongoose.Schema({
     bio: { type: String, default: "" },
     connectedAt: { type: Date, default: null },
   },
+  // Payment account: a passkey-controlled smart account on Whitechain Sepolia (no seed phrase, no gas token).
   wallet: {
     address: { type: String, default: "", lowercase: true, trim: true },
     chainId: { type: Number, default: null },
+    kind: { type: String, enum: ["passkey", ""], default: "" },
     connectedAt: { type: Date, default: null },
+    passkey: {
+      credentialId: { type: String, default: "" },
+      qx: { type: String, default: "" },
+      qy: { type: String, default: "" },
+    },
+    deployTx: { type: String, default: "" },
+    deployed: { type: Boolean, default: false },
+    // Pending registration ceremony (single use, short-lived).
     challengeMessage: { type: String, default: "" },
     challengeExpiresAt: { type: Date, default: null },
   },

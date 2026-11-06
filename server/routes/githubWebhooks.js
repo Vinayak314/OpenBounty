@@ -5,6 +5,7 @@ const Project = require("../models/Project");
 const Review = require("../models/Review");
 const { reviewRepositoryEnabled } = require("../services/github");
 const { queuePullRequestReview } = require("../services/ai/orchestrator");
+const { hasReviewCriteria } = require("../services/review/criteriaSource");
 
 const router = express.Router();
 const reviewActions = new Set(["opened", "reopened", "synchronize", "ready_for_review", "closed"]);
@@ -35,7 +36,7 @@ function verifySignature(secret, body, signature) {
 async function activeProject(repo) {
   const project = await Project.findOne({ "githubRepository.fullName": repo, status: "active" })
     .collation({ locale: "en", strength: 2 });
-  return project?.criteria?.items?.length ? project : null;
+  return project || null;
 }
 
 async function handlePullRequest(req, event) {
@@ -46,7 +47,7 @@ async function handlePullRequest(req, event) {
     || pr.base?.repo?.full_name?.toLowerCase() !== repo.toLowerCase()) return { code: 400 };
   if (pr.draft && event.action !== "closed") return { code: 204 };
   const project = await activeProject(repo);
-  if (!project) return { code: 204 };
+  if (!project || !(await hasReviewCriteria(project, event.number))) return { code: 204 };
   const status = queuePullRequestReview({
     io: req.app.get("io"), project, prNumber: event.number, expectedHeadSha: pr.head.sha, action: event.action,
   });

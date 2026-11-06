@@ -4,7 +4,7 @@ OpenBounty gives open-source teams a workspace for agreeing on acceptance criter
 
 ## Run locally
 
-Use Node.js 22 or newer, MongoDB, the project's Firebase Authentication setup with GitHub sign-in, and a 0G Private Computer API key.
+Use Node.js 22 or newer, MongoDB, the project's Firebase Authentication setup with GitHub sign-in, and a 0G Private Computer API key. Payments additionally need the deployed contracts and two test keys (see [Set up payments](#set-up-payments)).
 
 ```sh
 cd server
@@ -86,9 +86,68 @@ A request ID identifies an inference run on 0G; it is not proof that the review 
 
 Run the offline tests with `cd server && npm test`.
 
+## Whitechain · Payments nobody notices
+
+Bounties are paid in the designated test USDT (`0xcedfB56113143d55b2358b8CFbB0dEB5Ad2f55a7`) through a Solidity escrow on **Whitechain Sepolia (chain 1874)**. Payers and contributors sign in with GitHub and approve payments with a **passkey** (fingerprint, face or device PIN). They never see a seed phrase, never install a wallet, never switch networks and never hold WBT: OpenBounty's gas sponsor pays every network fee, including the token approval and the deposit.
+
+**Why on-chain stablecoin settlement.** A funded bounty reserves the exact reward and programmatically restricts release and refunds (one bound claimant, expiry rules, refund rules, a required human approval plus a backend attestation) while exposing a shared, verifiable receipt to both parties. A plain transfer or a conventional payment rail cannot hold a reward against approved criteria, lock it from unilateral withdrawal once work is submitted, or let funder and contributor audit the same payout record. This secures deposited funds under stated rules; it does not guarantee fair review or code quality.
+
+### How a payment works
+
+1. **Payment account.** On the Wallet page the browser creates a P-256 passkey and signs a server challenge with it (proof of possession). The server derives the user's `OpenBountyAccount` address from the public key through `OpenBountyAccountFactory` (CREATE2) and the sponsor deploys it. The account is the user's verified recipient.
+2. **Draft.** A maintainer creates a bounty from an issue: reward, deadline and acceptance criteria (drafted with 0G, edited by the maintainer).
+3. **Fund.** OpenBounty builds one batch, `USDT.approve(escrow, amount)` and `escrow.fund(terms)`, and shows what it does. The maintainer approves it with the passkey, and the sponsor submits `account.execute(...)`. The amount, criteria hash, repository reference and deadline are locked in escrow.
+4. **Claim.** A contributor requests the bounty. A maintainer accepts one claimant with a passkey approval, which binds that contributor's account as the only recipient.
+5. **Submit.** The claimant enters their PR number. The backend checks on GitHub that the PR targets the repository and was opened by the claimant, signs a `SubmissionAttestation`, and the sponsor relays `registerSubmission`. The 0G reviewer checks the PR against the bounty's funded criteria.
+6. **Pay.** After merge, a maintainer with payout permission clicks **Approve payout**. The backend re-validates GitHub (merged, claimant author, unchanged head) and requires a current 0G report. It signs a short-lived `SettlementAttestation` binding the bounty id, claim version, recipient, amount, criteria hash, reviewed SHA, merge commit and report hash. The maintainer approves with the passkey, and the escrow pays exactly once. Chat, the bounty board and the explorer show the receipt.
+7. **Refunds and cancellation.** An unclaimed bounty can be refunded to the original funder. Claimed or submitted work can be cancelled only when the claimant also consents with their passkey (an ERC-1271 signature).
+
+Payment state in MongoDB comes only from escrow events and contract reads that the backend fetches itself, never from a client-supplied transaction hash. The indexer applies each log once (unique `txHash`+`logIndex`), orders updates by block and log index, and periodically reconciles active bounties with `getBounty`/`effectiveStatus`, so a missed event is repaired without double-applying anything.
+
+### Gas funding and abuse prevention
+
+- **Who pays:** one sponsor key (`SPONSOR_PRIVATE_KEY`) holding test WBT, server-side only. It has **no authority** in the escrow. Every privileged action is authorized by the passkey signature inside `execute`, or by the separate attestation key, and the escrow checks signers, never the relayer.
+- **Only allowlisted calls:** the server builds every batch itself. Defense in depth then allows only `USDT.approve` with the escrow as spender and an amount under the cap, plus the escrow's bounty and role functions. Directly sent transactions are limited to `factory.createAccount`, `registerSubmission` and `expireClaim`. Value transfers and any other contract are rejected.
+- **Authenticated, signed, expiring requests:** each action is a server-side intent tied to the signed-in user, the account nonce and a 10-minute deadline. The passkey assertion must match the intent digest, the site's origin and RP ID, and require user verification (biometric or PIN). The account contract enforces the same digest, nonce and deadline (at most 1 hour) on chain.
+- **Limits:** per user (12/hour, 40/day), global (200/hour), maximum gas per transaction, a daily WBT budget, and a minimum sponsor balance below which sponsorship pauses with a clear "temporarily unavailable" message. Every sponsored transaction is recorded in `SponsoredTx`. Each action is simulated with `estimateGas` first, so failing actions cost nothing and show the decoded reason.
+
+The project's **Bounties** tab shows sponsor health, the daily budget used, and these limits.
+
+### Set up payments
+
+1. Deploy the passkey account factory: `cd contracts && npx hardhat run scripts/deployAccountFactory.js --network whitechainSepolia`. Put its address in `ACCOUNT_FACTORY_ADDRESS`.
+2. Create two **test** keys: the sponsor (fund it with WBT from the faucet) and the attestation signer. Set `SPONSOR_PRIVATE_KEY` and `ATTESTATION_PRIVATE_KEY`.
+3. Start the app. The project owner opens **Wallet** and creates a passkey payment account, then copies its address.
+4. Deploy the escrow with that account as owner: `OWNER_ADDRESS=<owner account> ATTESTATION_SIGNER_ADDRESS=<attestation address> npx hardhat run scripts/deploy.js --network whitechainSepolia`. Set `ESCROW_ADDRESS` and `ESCROW_DEPLOY_BLOCK`. If the escrow already exists, run `scripts/transferOwnership.js` and click **Accept escrow ownership** in the Bounties tab.
+5. In **Bounties → Payment permissions**, the owner grants co-owners the maintainer and payout permissions (one passkey approval each).
+6. Send designated test USDT to the funder's payment account and create a bounty.
+
+Set `WEBAUTHN_RP_ID` to the client's hostname and `WEBAUTHN_ORIGINS` to its exact origin. Passkeys only work on `https` sites or `localhost`.
+
+### Deployed addresses and evidence
+
+| Item | Value |
+|---|---|
+| Network | Whitechain Sepolia (1874) |
+| USDT (designated) | `0xcedfB56113143d55b2358b8CFbB0dEB5Ad2f55a7` |
+| OpenBountyAccountFactory | _add after deploy_ |
+| BountyEscrow | _add after deploy_ |
+| Settlement (payout) transaction | _add explorer link of a real payout_ |
+
+### Payment limitations
+
+- **Submitted work can stay locked.** There is no arbitration: a submission is released only by a maintainer-approved payout or a cancellation both sides sign. The UI states this before funding and claiming.
+- **Passkey loss.** Accounts have no recovery. Platform-synced passkeys (iCloud Keychain, Google Password Manager) reduce the risk; a lost passkey loses access to that account's funds.
+- **Trusted backend.** The escrow cannot read GitHub. It trusts the attestation key for "the claimant submitted this PR" and "this PR merged at this commit with this report". The key cannot pay without a maintainer's passkey approval and cannot change the recipient or amount.
+- **One escrow per deployment**, owned by one project owner's account; multi-project escrow ownership is future work. Single-process sponsor nonce handling and in-memory throttles.
+- `execute` verifies P-256 with the RIP-7212 precompile, which Whitechain Sepolia answers (checked with `eth_call`). Without it, OpenZeppelin falls back to Solidity verification (about 450k to 860k gas locally).
+- Test assets only. The designated USDT is an upgradeable proxy controlled by its issuer.
+
+Run the payment tests with `cd contracts && npx hardhat test` (escrow and passkey accounts) and `cd server && npm test` (includes an end-to-end run against a local Hardhat node and in-memory MongoDB).
+
 ## Architecture and scope
 
-The React workspace uses Firebase sign-in, an Express and Socket.IO API, and MongoDB. The server verifies webhook signatures, fetches GitHub data, calls 0G Private Computer and records the report. Local review jobs run in a single process and record their status in MongoDB. If the worker stops before finishing, retry from **PR reviews**, use `/review`, or redeliver the GitHub event. A separate Solidity escrow lives in [contracts](contracts/README.md). The review approval records a decision in OpenBounty. The escrow has its own settlement flow.
+The React workspace uses Firebase sign-in, an Express and Socket.IO API, and MongoDB. The server verifies webhook signatures, fetches GitHub data, calls 0G Private Computer and records the report. Local review jobs run in a single process and record their status in MongoDB. If the worker stops before finishing, retry from **PR reviews**, use `/review`, or redeliver the GitHub event. The Solidity escrow and passkey account contracts live in [contracts](contracts/README.md). Bounty payouts go through the escrow; the PR reviews screen's approval is for PRs that are not bounty submissions.
 
 The 0G integration is the project guide, scope assistant and advisory reviewer. Human maintainers approve criteria and contributions. The source uses a public-repository allowlist for GitHub comment publishing.
 

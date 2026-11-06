@@ -3,6 +3,8 @@ const mongoose = require("mongoose");
 // One AI evidence report for a PR head commit against one version of the approved criteria.
 const ReviewSchema = new mongoose.Schema({
   project: { type: mongoose.Schema.Types.ObjectId, ref: "Project", required: true, index: true },
+  // Set when the PR is a bounty submission: reviewed against that bounty's funded criteria.
+  bounty: { type: mongoose.Schema.Types.ObjectId, ref: "Bounty", default: null, index: true },
   prNumber: { type: Number, required: true },
   prUrl: { type: String, default: "" },
   prTitle: { type: String, default: "", maxlength: 300 },

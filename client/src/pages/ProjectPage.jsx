@@ -8,6 +8,7 @@ import ProjectRail from "@/components/project/ProjectRail";
 import ReviewPanel from "@/components/project/ReviewPanel";
 import CriteriaPanel from "@/components/project/CriteriaPanel";
 import AgentActivityPanel from "@/components/project/AgentActivityPanel";
+import BountyBoard from "@/components/project/BountyBoard";
 import { useChat } from "@/hooks/useChat";
 import { apiRequest } from "@/lib/api";
 
@@ -65,14 +66,15 @@ function ProjectWorkspace({ slug }) {
         <div className="flex min-h-0 flex-1">
           <main className="flex min-h-0 min-w-0 flex-1 flex-col">
             <nav className="flex gap-2 border-b border-ob-line bg-white px-6 py-2" aria-label="Workspace views">
-              {[["chat", "Chat"], ["criteria", "Criteria"], ["reviews", "PR reviews"], ["activity", "0G activity"]].map(([id, label]) => (
+              {[["chat", "Chat"], ["bounties", "Bounties"], ["criteria", "Criteria"], ["reviews", "PR reviews"], ["activity", "0G activity"]].map(([id, label]) => (
                 <button key={id} type="button" aria-pressed={view === id} onClick={() => setView(id)}
                   className={`rounded-lg px-3 py-2 text-xs font-semibold ${view === id ? "bg-ob-navy text-white" : "text-ob-slate hover:bg-ob-mist"}`}>
                   {label}
                 </button>
               ))}
             </nav>
-            {view === "reviews" ? <ReviewPanel slug={slug} />
+            {view === "bounties" ? <BountyBoard slug={slug} canMaintain={project.canMaintain} />
+              : view === "reviews" ? <ReviewPanel slug={slug} />
               : view === "criteria" ? <CriteriaPanel slug={slug} />
                 : view === "activity" ? <AgentActivityPanel slug={slug} /> : <>
             {chat.error && <p role="alert" className="border-b border-amber-200 bg-amber-50 px-6 py-2 text-xs text-amber-900">{chat.error}</p>}

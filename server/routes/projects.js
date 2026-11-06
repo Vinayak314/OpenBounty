@@ -1,13 +1,13 @@
 const express = require("express");
 const mongoose = require("mongoose");
 const ChatMessage = require("../models/ChatMessage");
-const Project = require("../models/Project");
 const Review = require("../models/Review");
 const ReviewJob = require("../models/ReviewJob");
 const { requireFirebaseUser } = require("../middleware/requireFirebaseUser");
 const { findProjectAccess, isProjectMaintainer } = require("../services/projectAccess");
 const { AGENT_UID, messageResponse, reportView } = require("../services/chatSerializer");
 const { approveCriteria, criteriaView, CriteriaError } = require("../services/criteria");
+const { criteriaMapFor, criteriaStillCurrent } = require("../services/review/criteriaSource");
 const { fetchPullRequestHead } = require("../services/github");
 const aiOrchestrator = require("../services/ai/orchestrator");
 
@@ -83,7 +83,11 @@ router.get("/:slug/reviews", async (req, res) => {
     ]);
     const jobs = await ReviewJob.find({ project: project._id }).sort({ updatedAt: -1 }).limit(20).lean();
     res.json({
-      reviews: latest.map(({ review }) => reportView(Review.hydrate(review), project.criteria)),
+      reviews: await (async () => {
+        const hydrated = latest.map(({ review }) => Review.hydrate(review));
+        const criteriaFor = await criteriaMapFor(project, hydrated);
+        return hydrated.map((review) => reportView(review, criteriaFor(review)));
+      })(),
       jobs: jobs.map((job) => ({
         prNumber: job.prNumber, status: job.status, source: job.source, headSha: job.headSha,
         errorCode: job.errorCode, error: job.error, attempts: job.attempts, updatedAt: job.updatedAt,
@@ -109,6 +113,7 @@ router.post("/:slug/reviews/:reviewId/approve", async (req, res) => {
     }
     const review = await Review.findOne({ _id: req.params.reviewId, project: project._id });
     if (!review) return res.status(404).json({ error: "Review not found." });
+    if (review.bounty) return res.status(409).json({ error: "This PR is a bounty submission. Approve its payout from the bounty." });
     const view = reportView(review, project.criteria);
     if (view.stale || !review.requestId || !review.reportHash || req.body?.reportHash !== review.reportHash) {
       return res.status(409).json({ error: "The evidence is missing or has changed. Open the latest report." });
@@ -119,10 +124,7 @@ router.post("/:slug/reviews/:reviewId/approve", async (req, res) => {
       return res.status(409).json({ error: "The PR commit changed. Run a new review before approving." });
     }
     if (head.state !== "merged") return res.status(409).json({ error: "Merge the reviewed PR on GitHub before approving its evidence." });
-    const current = await Project.exists({
-      _id: project._id, status: "active", "githubRepository.fullName": project.githubRepository.fullName,
-      "criteria.hash": review.criteriaHash, "criteria.version": review.criteriaVersion,
-    });
+    const current = await criteriaStillCurrent(project, review);
     if (!current) return res.status(409).json({ error: "Project settings changed. Open the latest report." });
 
     const filter = { _id: review._id, project: project._id, status: "complete", reportHash: review.reportHash };

@@ -59,7 +59,7 @@ async function approveCriteria({ project, texts, byUid, byName, expectedVersion 
       : new CriteriaError("This project no longer exists.", "project_not_found");
   }
   // Evidence produced against older criteria no longer applies.
-  await Review.updateMany({ project: project._id, criteriaVersion: { $lt: updated.criteria.version }, status: "complete" },
+  await Review.updateMany({ project: project._id, bounty: null, criteriaVersion: { $lt: updated.criteria.version }, status: "complete" },
     { $set: { status: "stale" } });
   project.criteria = updated.criteria;
   return updated.criteria;
