@@ -88,7 +88,7 @@ A request ID identifies an inference run on 0G; it is not proof that the review 
 
 Run the offline tests with `cd server && npm test`.
 
-## Whitechain · Payments nobody notices
+## Whitechain Scale · Payments nobody notices
 
 Bounties are paid in the designated test USDT (`0xcedfB56113143d55b2358b8CFbB0dEB5Ad2f55a7`) through a Solidity escrow on **Whitechain Sepolia (chain 1874)**. Payers and contributors sign in with GitHub and approve payments with a **passkey** (fingerprint, face or device PIN). They never see a seed phrase, never install a wallet, never switch networks and never hold WBT: OpenBounty's gas sponsor pays every network fee, including the token approval and the deposit. Token roles follow the ETHGlobal prize page: **USDT is the settlement token** (rewards, escrow, payouts) and **WBT is only the native gas token**, spent by the sponsor. Rewards are deliberately not paid in WBT: the track requires a designated-USDT settlement, and payers must hold no WBT.
 
