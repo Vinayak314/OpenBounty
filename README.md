@@ -64,7 +64,7 @@ Built for two ETHGlobal Mumbai tracks: **0G · Build with 0G Private Computer** 
 | Vinayak Pai | [vin314](https://t.me/vin314) | [@vinayak_314](https://x.com/vinayak_314) |
 | Ishant Panchal | [Ishant_Panchal](https://t.me/Ishant_Panchal) | [@IshantP38294](https://x.com/IshantP38294) |
 | Sarthak Junonikar | [s_juno07](https://t.me/s_juno07) | [@Sarthak17176121](https://x.com/Sarthak17176121) |
-| Tanushree Borase | – | – |
+| Tanushree Borase | [@tanushree100](https://t.me/tanushree100) | [@TanushreeB9](https://x.com/TanushreeB9)|
 
 ---
 
