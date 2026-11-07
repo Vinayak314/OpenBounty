@@ -51,7 +51,7 @@ Built for two ETHGlobal Mumbai tracks: **0G · Build with 0G Private Computer** 
 | Live app | [openbounty-theta.vercel.app](https://openbounty-theta.vercel.app) (frontend on Vercel) |
 | Backend API | `https://openbounty.onrender.com` (Render; `GET /api/health`) |
 | 0G judge demo | [openbounty-theta.vercel.app/demo/0g](https://openbounty-theta.vercel.app/demo/0g) (also linked from the homepage) |
-| Demo video (under 3 min) | _add link before submitting_ |
+| Demo video (under 3 min) | [Video Link](https://youtu.be/cwnBzbyT2BM) |
 | Public repo | this repository |
 | Whitechain feedback | [WHITECHAIN_FEEDBACK.md](WHITECHAIN_FEEDBACK.md) |
 | Deployed contracts | see [Deployed addresses](#deployed-addresses-and-evidence) |
