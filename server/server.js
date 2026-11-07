@@ -21,6 +21,7 @@ const io = new SocketIOServer(httpServer, {
 });
 
 app.set("io", io);
+app.set("etag", false); // API JSON is never cached, so ETag revalidation (304) only adds a round trip.
 // Behind a reverse proxy, set TRUST_PROXY (for example to 1) so per-visitor limits see the real client address.
 if (process.env.TRUST_PROXY) {
   const hops = Number(process.env.TRUST_PROXY);
@@ -78,7 +79,8 @@ app.use("/api", (req, res, next) => {
   res.on("close", () => { if (!res.writableFinished) console.log(`${req.method} ${req.baseUrl}${req.path} closed before a response ${Date.now() - started}ms`); });
   next();
 });
-app.use(express.json({ limit: "5mb" }));
+// CORS comes before the body parser so that even a rejected body (too large, malformed) gets CORS headers
+// and the browser shows the real error instead of a misleading CORS failure.
 app.use((req, res, next) => {
   if (allowedOrigins.includes(req.headers.origin)) {
     res.setHeader("Access-Control-Allow-Origin", req.headers.origin);
@@ -86,9 +88,13 @@ app.use((req, res, next) => {
   }
   res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type");
   res.setHeader("Access-Control-Allow-Methods", "GET, PUT, POST, PATCH, DELETE, OPTIONS");
+  // API answers are per-user and change often. Without this the browser keeps copies and revalidates them
+  // (the 304 replies), and a copy stored before CORS was configured can fail the cross-origin check.
+  if (req.path.startsWith("/api")) res.setHeader("Cache-Control", "no-store");
   if (req.method === "OPTIONS") return res.sendStatus(204);
   next();
 });
+app.use(express.json({ limit: "5mb" }));
 app.get("/api/health", (_req, res) => {
   const ready = mongoose.connection.readyState === 1;
   res.status(ready ? 200 : 503).json({ ready });
