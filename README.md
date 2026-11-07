@@ -48,9 +48,10 @@ Built for two ETHGlobal Mumbai tracks: **0G · Build with 0G Private Computer** 
 |---|---|
 | Project name | OpenBounty |
 | Description | AI guidance, criteria drafting and PR evidence reviews on 0G, with gasless USDT bounty payouts on Whitechain |
-| Live app | _add URL_ |
-| 0G judge demo | _`<live URL>`_`/demo/0g` (also linked from the homepage) |
-| Demo video (under 3 min) | _add link_ |
+| Live app | [openbounty-theta.vercel.app](https://openbounty-theta.vercel.app) (frontend on Vercel) |
+| Backend API | `https://openbounty.onrender.com` (Render; `GET /api/health`) |
+| 0G judge demo | [openbounty-theta.vercel.app/demo/0g](https://openbounty-theta.vercel.app/demo/0g) (also linked from the homepage) |
+| Demo video (under 3 min) | _add link before submitting_ |
 | Public repo | this repository |
 | Whitechain feedback | [WHITECHAIN_FEEDBACK.md](WHITECHAIN_FEEDBACK.md) |
 | Deployed contracts | see [Deployed addresses](#deployed-addresses-and-evidence) |
@@ -63,6 +64,7 @@ Built for two ETHGlobal Mumbai tracks: **0G · Build with 0G Private Computer** 
 | Vinayak Pai | [vin314](https://t.me/vin314) | [@vinayak_314](https://x.com/vinayak_314) |
 | Ishant Panchal | [Ishant_Panchal](https://t.me/Ishant_Panchal) | [@IshantP38294](https://x.com/IshantP38294) |
 | Sarthak Junonikar | [s_juno07](https://t.me/s_juno07) | [@Sarthak17176121](https://x.com/Sarthak17176121) |
+| Tanushree Borase | – | – |
 
 ---
 

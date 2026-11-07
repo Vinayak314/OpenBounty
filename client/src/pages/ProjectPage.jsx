@@ -54,7 +54,7 @@ function ProjectWorkspace({ slug }) {
   }
 
   return (
-    <div className="flex h-screen min-h-0 overflow-hidden bg-[#f8fafc] font-sans leading-[normal] text-ob-navy">
+    <div className="flex h-dvh min-h-0 overflow-hidden bg-[#f8fafc] font-sans leading-[normal] text-ob-navy">
       <ProjectSidebar project={project} view={view} onView={(next) => { setView(next); if (next !== "chat") setQuery(""); }} />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <ChannelHeader title={VIEWS.find((v) => v.id === view)?.label} view={view} query={query} onQuery={setQuery} sound={chat.sound} onToggleSound={() => chat.setSound((value) => !value)} connectionStatus={chat.connectionStatus} />
@@ -62,7 +62,7 @@ function ProjectWorkspace({ slug }) {
           <main className="flex min-h-0 min-w-0 flex-1 flex-col">
             {view === "bounties" ? <BountyBoard slug={slug} canMaintain={project.canMaintain} />
               : view === "activity" ? <AgentActivityPanel slug={slug} /> : <>
-            {chat.error && <p role="alert" className="border-b border-amber-200 bg-amber-50 px-6 py-2 text-xs text-amber-900">{chat.error}</p>}
+            {chat.error && <p role="alert" className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs sm:px-6 text-amber-900">{chat.error}</p>}
             <ChatThread
               messages={chat.messages}
               typing={chat.typing}

@@ -70,7 +70,8 @@ export default function PaymentsPanel({ slug, refreshKey, onChanged }) {
               <PasskeyAction label="Accept escrow ownership" prepare={() => apiRequest(`/projects/${encodeURIComponent(slug)}/payments/ownership/accept`, { method: "POST" })} onDone={refresh} />
             </div>
           )}
-          <table className="mt-3 w-full text-left">
+          <div className="mt-3 overflow-x-auto">
+          <table className="w-full min-w-[460px] text-left">
             <thead><tr className="text-ob-slate"><th className="py-1">Person</th><th>Account</th><th>Maintainer</th><th>Approve payouts</th></tr></thead>
             <tbody>
               {members.map((member) => (
@@ -94,6 +95,7 @@ export default function PaymentsPanel({ slug, refreshKey, onChanged }) {
               ))}
             </tbody>
           </table>
+          </div>
           {overview.autoPay?.available && (
             <div className="mt-3 rounded-lg border border-ob-line p-2">
               <p className="font-semibold">Automatic payouts</p>

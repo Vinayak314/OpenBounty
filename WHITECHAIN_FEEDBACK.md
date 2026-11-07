@@ -1,9 +1,8 @@
 # Whitechain feedback
 
-> **DRAFT SKELETON.** ETHGlobal asks for "a few honest lines on what worked, where you got stuck and what our
-> docs were missing." Only the contract-side notes below come from work actually done (read-only probing of the
-> testnet RPC and docs on 2026-11-06). Everything marked **TODO** must be filled in by the people who deploy and run
-> the demo; do not submit with TODOs left or with claims that were not exercised.
+> ETHGlobal asks for "a few honest lines on what worked, where you got stuck and what our docs were missing." The
+> notes below come from probing the testnet RPC and docs and from deploying and running the app on Whitechain Sepolia
+> on 2026-11-06.
 
 ## What worked
 
@@ -16,7 +15,8 @@
 - The RIP-7212 P-256 precompile (`0x…0100`) answered a valid signature with `1` in an `eth_call` probe on 2026-11-06.
   This made passkey (WebAuthn) smart accounts practical: verification uses the precompile instead of a ~450k-860k gas
   Solidity fallback. A line in the docs saying it is supported would have saved the probe.
-- **TODO:** deployment experience (Hardhat/Foundry), faucet speed, explorer behaviour after deploy.
+- Deployment with Hardhat 2 and `evmVersion: cancun` worked: the account factory and the escrow were deployed to
+  chain 1874 about ten minutes apart (2026-11-06) and were readable on the explorer afterwards.
 
 ## Where we got stuck
 
@@ -25,7 +25,7 @@
 - The testnet network page does not state the target EVM version; we probed opcodes before finding that the Hardhat
   deployment page recommends `prague` (solc 0.8.30). A line on the network page would save a detour.
 - The Hardhat deployment/verification page targets Hardhat 3 (`type: "http"`, `hardhatToolboxViem`). Our repo uses
-  Hardhat 2, so the config and verification setup had to be translated and is **untested until we deploy**.
+  Hardhat 2, so the config and verification setup had to be translated (it works, see the verification note below).
 - We found no documented ERC-4337 bundler, paymaster or embedded-wallet provider for chain 1874, so we built our own
   gas sponsor (a relayer for passkey smart accounts) instead of a third-party provider.
 - Verification: `hardhat verify` (v2) first failed because its Sourcify v1 endpoint has been removed upstream ("API v1 is removed") and `--constructor-args-path` is not recognised. With `SOURCIFY=false` and `--constructor-args <file>` both contracts verified on the Blockscout explorer. Deployment on chain 1874 and indexing of escrow events worked.
@@ -38,11 +38,10 @@
   that risk accurately.
 - A documented, supported path for gas sponsorship / embedded wallets / paymasters on chain 1874. We used our own
   relayer plus passkey accounts (below). It worked on the live network: the sponsor paid gas for account creation, funding, claim acceptance, submission and the payout.
-- **TODO:** anything else.
 
 ## Gas sponsorship and abuse prevention (Scale track)
 
-Built (tested locally end to end against a Hardhat node; **not yet run on Whitechain Sepolia**):
+Built, tested locally end to end against a Hardhat node, and run on Whitechain Sepolia (evidence links below):
 
 - **Zero gas for payers:** each user has an `OpenBountyAccount` controlled by a passkey (no seed phrase). OpenBounty's
   sponsor key submits `execute(...)` and pays WBT; `approve` and `fund` run in the same sponsored batch.

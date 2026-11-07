@@ -79,7 +79,7 @@ export default function ConnectWalletPage() {
       />
       <div className="relative z-10 flex min-h-screen flex-col">
         <OnboardingHeader helpLink={s.helpLink} />
-        <main className="flex flex-col items-center gap-6 pt-[72px]">
+        <main className="flex flex-col items-center gap-6 pt-8 sm:pt-12 md:pt-[72px]">
           <JourneyProgress steps={steps} />
           <ConnectWalletCard
             account={account}
@@ -97,7 +97,7 @@ export default function ConnectWalletPage() {
           <p className="text-[10px] text-ob-slate opacity-60">{s.network}</p>
         </main>
         <footer className="mt-auto pb-[31px] text-center">
-          <p className="whitespace-pre text-[10px] text-ob-slate opacity-60">{s.footer}</p>
+          <p className="whitespace-pre-line px-4 text-[10px] text-ob-slate opacity-60">{s.footer}</p>
         </footer>
       </div>
     </div>

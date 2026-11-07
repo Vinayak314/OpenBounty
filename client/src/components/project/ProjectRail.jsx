@@ -1,7 +1,10 @@
 import { useState } from "react";
-import { ArrowUpRight, ChevronDown, Github, PanelRightClose, PanelRightOpen, Terminal } from "lucide-react";
+import { ArrowUpRight, ChevronDown, Github, PanelRightClose, PanelRightOpen, Terminal, X } from "lucide-react";
 import GroupInvites from "@/components/project/GroupInvites";
 import { COMMANDS } from "@/hooks/useChat";
+import { cn } from "@/lib/utils";
+import { DrawerBackdrop } from "@/components/layout/NavDrawer";
+import { useNavDrawer, useScrollLock } from "@/components/layout/navDrawerState";
 
 const STORAGE_KEY = "ob:project-rail";
 
@@ -32,10 +35,14 @@ function Section({ id, title, icon: Icon, open, onToggle, children }) {
 export default function ProjectRail({ project }) {
   const [prefs, setPrefs] = useState(() => ({ collapsed: false, about: true, commands: true, ...readPrefs() }));
   const update = (patch) => setPrefs((current) => { const next = { ...current, ...patch }; savePrefs(next); return next; });
+  const { panel, close } = useNavDrawer();
+  const drawerOpen = panel === "details";
+  useScrollLock(drawerOpen);
 
-  if (prefs.collapsed) {
+  // The desktop "collapsed" preference only applies where the panel is a column; on a phone it is a drawer.
+  if (prefs.collapsed && !drawerOpen) {
     return (
-      <aside className="flex w-[44px] shrink-0 flex-col items-center border-l border-ob-line pt-[22px]">
+      <aside className="hidden w-[44px] shrink-0 flex-col items-center border-l border-ob-line pt-[22px] lg:flex">
         <button type="button" aria-label="Show project details" title="Show project details" onClick={() => update({ collapsed: false })}
           className="flex size-8 items-center justify-center rounded-full text-ob-navy hover:bg-ob-mist">
           <PanelRightOpen className="size-[18px]" strokeWidth={1.8} />
@@ -45,11 +52,22 @@ export default function ProjectRail({ project }) {
   }
 
   return (
-    <aside className="w-[300px] shrink-0 overflow-y-auto border-l border-ob-line px-[18px] pb-6 pt-[22px]">
+    <>
+    <DrawerBackdrop name="details" breakpoint="lg" />
+    <aside className={cn(
+      // Below lg the details slide in from the right; from lg up they are a column beside the conversation.
+      "fixed inset-y-0 right-0 z-50 w-[300px] max-w-[88vw] shrink-0 overflow-y-auto border-l border-ob-line bg-[#f8fafc] px-[18px] pb-6 pt-[22px] transition-transform duration-200 ease-out",
+      "lg:static lg:z-auto lg:max-w-none lg:translate-x-0 lg:bg-transparent",
+      drawerOpen ? "translate-x-0 shadow-2xl" : "translate-x-full",
+    )}>
       <div className="mb-4 flex items-center justify-between gap-2">
         <h2 className="font-serif text-[24px] leading-tight text-ob-navy">Project details</h2>
+        <button type="button" aria-label="Close project details" onClick={close}
+          className="flex size-10 shrink-0 items-center justify-center rounded-full text-ob-navy hover:bg-ob-mist lg:hidden">
+          <X className="size-[18px]" strokeWidth={1.8} />
+        </button>
         <button type="button" aria-label="Hide project details" title="Hide project details" onClick={() => update({ collapsed: true })}
-          className="flex size-8 shrink-0 items-center justify-center rounded-full text-ob-navy hover:bg-ob-mist">
+          className="hidden size-8 shrink-0 items-center justify-center rounded-full text-ob-navy hover:bg-ob-mist lg:flex">
           <PanelRightClose className="size-[18px]" strokeWidth={1.8} />
         </button>
       </div>
@@ -65,7 +83,7 @@ export default function ProjectRail({ project }) {
         <ul className="divide-y divide-ob-line overflow-hidden rounded-[10px] border border-ob-line bg-white">
           {COMMANDS.map((c) => (
             <li key={c.cmd}>
-              <button type="button" title={c.description} onClick={() => composeCommand(`${c.cmd} `)}
+              <button type="button" title={c.description} onClick={() => { composeCommand(`${c.cmd} `); close(); }}
                 className="flex w-full items-baseline justify-between gap-2 px-3 py-2 text-left hover:bg-ob-mist">
                 <code className="shrink-0 text-[11px] font-semibold text-ob-navy">{c.usage}</code>
                 <span className="truncate text-[10px] text-ob-slate">{c.short}</span>
@@ -79,5 +97,6 @@ export default function ProjectRail({ project }) {
         </ul>
       </Section>
     </aside>
+    </>
   );
 }

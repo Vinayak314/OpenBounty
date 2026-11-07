@@ -13,7 +13,7 @@ const usdt = (value) => {
 
 export default function ConnectWalletCard({ account, intro, wallet, walletLoading, walletBusy, walletError, onConnectWallet, onDisconnectWallet, trustNote, nextStep, config }) {
   return (
-    <section className="flex w-[530px] flex-col items-center gap-4 overflow-hidden rounded-[12px] border border-ob-line bg-white p-7">
+    <section className="flex w-[calc(100%-2rem)] max-w-[530px] flex-col items-center gap-4 overflow-hidden rounded-[12px] border border-ob-line bg-white p-5 sm:p-7">
       <div className="flex size-12 items-center justify-center rounded-full bg-[#f8fafc]">
         <img src={walletIcon} alt="" className="size-6" />
       </div>
@@ -64,7 +64,7 @@ export default function ConnectWalletCard({ account, intro, wallet, walletLoadin
           type="button"
           onClick={onConnectWallet}
           disabled={walletLoading || walletBusy || config?.accountsEnabled === false}
-          className="flex h-10 w-full items-center justify-center gap-2 rounded-[8px] border border-ob-navy bg-ob-navy px-4 text-[13px] font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-wait disabled:opacity-60"
+          className="flex min-h-10 w-full items-center justify-center gap-2 rounded-[8px] border border-ob-navy py-2 bg-ob-navy px-4 text-[13px] font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-wait disabled:opacity-60"
         >
           <img src={walletWhite} alt="" className="size-[18px]" />
           {walletLoading ? "Loading…" : walletBusy ? "Follow your device's passkey prompt…" : "Create payment account with a passkey"}

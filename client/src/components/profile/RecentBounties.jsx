@@ -16,7 +16,7 @@ export default function RecentBounties({ data }) {
         <div key={item.id} className="contents">
           <Rule />
           <div className="flex items-center gap-4">
-            <div className="flex min-w-0 flex-1 flex-col gap-[3px] whitespace-nowrap leading-[normal]">
+            <div className="flex min-w-0 flex-1 flex-col gap-[3px] leading-[normal] [&>p]:truncate">
               <p className="text-[13px] font-semibold text-ob-navy">{item.title}</p>
               <p className="text-[10px] text-[#94a3b8]">{item.meta}</p>
             </div>

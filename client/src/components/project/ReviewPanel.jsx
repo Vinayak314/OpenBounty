@@ -82,7 +82,7 @@ export default function ReviewPanel({ slug }) {
   }
 
   return (
-    <section className="min-h-0 flex-1 overflow-y-auto p-6" aria-label="Pull request reviews">
+    <section className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6" aria-label="Pull request reviews">
       <h2 className="font-serif text-2xl">Pull request reviews</h2>
       <p className="my-2 text-xs text-ob-slate">Compare the 0G evidence with the PR before recording your approval.</p>
       {loading && <p role="status" className="text-sm text-ob-slate">Loading reviews…</p>}

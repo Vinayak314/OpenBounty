@@ -6,9 +6,9 @@ export const profile = {
   githubConnected: true,
   githubBadgeLabel: "GitHub connected ✓",
   wallet: {
-    label: "PAYOUT WALLET · BASE",
-    address: "Not connected",
-    provider: "Connect a wallet to receive payouts",
+    label: "PAYMENT ACCOUNT · WHITECHAIN",
+    address: "Not created",
+    provider: "Create a payment account to receive payouts",
   },
 };
 

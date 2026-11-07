@@ -53,7 +53,7 @@ export default function BountyBoard({ slug, canMaintain }) {
   const selected = bounties.find((bounty) => bounty.number === open);
 
   return (
-    <section className="min-h-0 flex-1 overflow-y-auto p-6" aria-label="Bounty board">
+    <section className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6" aria-label="Bounty board">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h2 className="font-serif text-2xl">Bounties</h2>

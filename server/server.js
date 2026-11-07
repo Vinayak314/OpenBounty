@@ -69,6 +69,15 @@ io.on("connection", (socket) => {
 });
 
 app.use("/api/webhooks/github", require("./routes/githubWebhooks"));
+// One line per API request (method, path, status, time) so a failing call can be found in the host's logs.
+// The query string, headers and bodies are never logged; health checks are skipped to keep the log readable.
+app.use("/api", (req, res, next) => {
+  if (req.path === "/health") return next();
+  const started = Date.now();
+  res.on("finish", () => console.log(`${req.method} ${req.baseUrl}${req.path} ${res.statusCode} ${Date.now() - started}ms`));
+  res.on("close", () => { if (!res.writableFinished) console.log(`${req.method} ${req.baseUrl}${req.path} closed before a response ${Date.now() - started}ms`); });
+  next();
+});
 app.use(express.json({ limit: "5mb" }));
 app.use((req, res, next) => {
   if (allowedOrigins.includes(req.headers.origin)) {

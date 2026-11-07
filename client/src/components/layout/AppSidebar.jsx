@@ -8,6 +8,8 @@ import { signOut } from "firebase/auth";
 import { auth } from "../../../firebase/firebase";
 import InitialsAvatar from "./InitialsAvatar";
 import { iconProps } from "./icon";
+import { DrawerBackdrop } from "./NavDrawer";
+import { useNavDrawer, useScrollLock } from "./navDrawerState";
 
 const NAV_ICONS = { dashboard: LayoutDashboard, profile: UserRound };
 
@@ -65,12 +67,20 @@ const VARIANTS = {
 export default function AppSidebar({ active, variant = "default", width }) {
   const v = VARIANTS[variant] ?? VARIANTS.default;
   const { name, handle, initials, photoURL, githubUrl } = useAuth();
+  const { panel } = useNavDrawer();
+  const open = panel === "nav";
+  useScrollLock(open);
 
   return (
+    <>
+    <DrawerBackdrop name="nav" />
     <aside
       style={{ width: width ?? v.width }}
       className={cn(
-        "sticky top-0 flex h-screen min-h-[640px] shrink-0 flex-col bg-ob-navy font-sans",
+        // Phones: a drawer that slides over the page. From md up: the sticky column of the desktop layout.
+        "fixed inset-y-0 left-0 z-50 flex max-w-[85vw] shrink-0 flex-col overflow-y-auto bg-ob-navy font-sans transition-transform duration-200 ease-out",
+        "md:sticky md:top-0 md:z-auto md:h-screen md:min-h-[640px] md:max-w-none md:translate-x-0 md:overflow-visible",
+        open ? "translate-x-0 shadow-2xl" : "-translate-x-full",
         v.root,
       )}
     >
@@ -131,7 +141,7 @@ export default function AppSidebar({ active, variant = "default", width }) {
         </div>
       )}
 
-      <div className="absolute bottom-7 left-5 right-5">
+      <div className="mt-auto md:absolute md:bottom-7 md:left-5 md:right-5 md:mt-0">
         <div className="flex min-w-0 items-center gap-[10px]">
           {githubUrl ? (
             <a href={githubUrl} target="_blank" rel="noreferrer" aria-label="Open GitHub profile">
@@ -146,5 +156,6 @@ export default function AppSidebar({ active, variant = "default", width }) {
         </div>
       </div>
     </aside>
+    </>
   );
 }

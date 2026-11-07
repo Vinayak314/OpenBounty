@@ -27,7 +27,7 @@ export default function AgentActivityPanel({ slug }) {
 
   const totals = activity?.totals;
   return (
-    <section className="min-h-0 flex-1 overflow-y-auto p-6" aria-label="0G agent activity">
+    <section className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6" aria-label="0G agent activity">
       <h2 className="font-serif text-2xl">0G activity</h2>
       <p className="my-2 text-xs text-ob-slate">
         Every agent answer, criteria draft and PR review in this project runs on 0G Private Computer. A request ID identifies one inference run; it does not prove the output is correct.

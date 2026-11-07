@@ -44,7 +44,7 @@ export default function ProfilePage() {
       ...profile.wallet,
       address: `${linkedWallet.address.slice(0, 6)}…${linkedWallet.address.slice(-4)}`,
       fullAddress: linkedWallet.address,
-      provider: "MetaMask · Base connected",
+      provider: "Passkey account · Whitechain Sepolia",
     } : profile.wallet,
   };
   const stats = [

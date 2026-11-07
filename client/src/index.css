@@ -65,6 +65,18 @@
   body {
     @apply bg-background text-foreground font-sans antialiased;
   }
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+}
+/* iOS zooms the page when a focused field uses a font under 16px, so fields stay at 16px on phones.
+   !important is needed to win over the small text utilities (for example text-[12px]) used by the desktop design. */
+@media (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
 }
 @keyframes rise {
   from { opacity: 0; transform: translateY(8px); }
@@ -73,6 +85,10 @@
 @keyframes pop {
   from { opacity: 0; transform: scale(0.94); }
   to { opacity: 1; transform: scale(1); }
+}
+@keyframes fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 @keyframes flash {
   0%, 60% { background-color: rgba(56, 189, 248, 0.18); }

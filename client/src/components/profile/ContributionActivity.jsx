@@ -7,8 +7,8 @@ export default function ContributionActivity({ activity }) {
   const { legend } = activity;
 
   return (
-    <section className="flex flex-col gap-5 rounded-xl border border-ob-line bg-white p-6">
-      <div className="flex items-center justify-between whitespace-nowrap leading-[normal]">
+    <section className="flex min-w-0 flex-col gap-5 rounded-xl border border-ob-line bg-white p-4 sm:p-6">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 leading-[normal]">
         <div className="flex flex-col gap-1">
           <h2 className="font-serif text-[22px] font-normal text-ob-navy">{activity.title}</h2>
           <p className="text-[11px] text-[#94a3b8]">{activity.summary}</p>

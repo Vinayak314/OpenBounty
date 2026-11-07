@@ -94,7 +94,7 @@ export default function CriteriaPanel({ slug }) {
   const update = (index, value) => setItems((current) => current.map((text, i) => i === index ? value : text));
 
   return (
-    <section className="min-h-0 flex-1 overflow-y-auto p-6" aria-label="Acceptance criteria">
+    <section className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6" aria-label="Acceptance criteria">
       <h2 className="font-serif text-2xl">Acceptance criteria</h2>
       <p className="my-2 text-xs text-ob-slate">
         The 0G scope assistant drafts criteria. A maintainer edits and approves them; the reviewer checks every PR against the approved version.

@@ -193,10 +193,10 @@ export default function Composer({ onSend, onTyping, replyTo, onCancelReply, edi
   const bar = "mb-2 flex animate-[pop_.15s_ease-out] items-center gap-2 rounded-[10px] bg-ob-mist px-3 py-[6px] text-[10px]";
 
   return (
-    <div className="shrink-0 border-t border-ob-line bg-[#f8fafc] px-6 pb-3 pt-3">
+    <div className="shrink-0 border-t border-ob-line bg-[#f8fafc] px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 sm:px-6">
       <div className="relative">
         {suggestions.length > 0 && (
-          <ul className="absolute bottom-full left-0 z-10 mb-2 w-[260px] animate-[pop_.15s_ease-out] overflow-hidden rounded-[12px] border border-ob-line bg-white p-1 shadow-lg">
+          <ul className="absolute bottom-full left-0 z-10 mb-2 w-[260px] max-w-full animate-[pop_.15s_ease-out] overflow-hidden rounded-[12px] border border-ob-line bg-white p-1 shadow-lg">
             {suggestions.map((s, i) => (
               <li key={s.key}>
                 <button
@@ -255,7 +255,8 @@ export default function Composer({ onSend, onTyping, replyTo, onCancelReply, edi
           )}
           <textarea
             ref={area}
-            autoFocus
+            // On a phone, focusing on load would pop the keyboard over the conversation.
+            autoFocus={typeof window !== "undefined" && !window.matchMedia("(pointer: coarse)").matches}
             rows={1}
             value={text}
             onChange={(e) => {
@@ -301,7 +302,7 @@ export default function Composer({ onSend, onTyping, replyTo, onCancelReply, edi
                 )}
               </div>
               <input ref={fileInput} type="file" multiple hidden onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
-              <span className="text-[10px]">Markdown · Enter to send</span>
+              <span className="hidden text-[10px] sm:inline">Markdown · Enter to send</span>
             </div>
             <button
               type="button"
@@ -314,7 +315,7 @@ export default function Composer({ onSend, onTyping, replyTo, onCancelReply, edi
           </div>
         </div>
       </div>
-      <p className="mt-2 text-[10px] text-ob-slate">Project messages are saved to this workspace.</p>
+      <p className="mt-2 hidden text-[10px] text-ob-slate sm:block">Project messages are saved to this workspace.</p>
     </div>
   );
 }

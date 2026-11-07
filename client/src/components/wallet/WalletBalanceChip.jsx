@@ -88,7 +88,7 @@ export default function WalletBalanceChip({ className = "" }) {
         <span className="font-medium text-ob-slate">USDT</span>
       </button>
       {open && (
-        <div role="dialog" aria-label="Payment account" className="absolute right-0 top-11 z-40 w-[320px] animate-[pop_.15s_ease-out] rounded-xl border border-[#e5e7eb] bg-white p-3 text-[11px] shadow-xl">
+        <div role="dialog" aria-label="Payment account" className="fixed inset-x-3 top-[68px] z-40 max-h-[calc(100dvh-84px)] animate-[pop_.15s_ease-out] overflow-y-auto rounded-xl border border-[#e5e7eb] bg-white p-3 text-[11px] shadow-xl sm:absolute sm:inset-x-auto sm:right-0 sm:top-11 sm:w-[320px]">
           <p className="text-xs font-semibold text-ob-navy">Your payment account</p>
           <p className="mt-1 text-ob-slate">{config?.networkName || "Whitechain Sepolia"} (test network) · passkey smart account, no wallet app</p>
           <p className="mt-2 text-2xl font-semibold text-ob-navy">{formatUnits6(account.usdtBalance)} <span className="text-xs font-medium text-ob-slate">USDT</span></p>

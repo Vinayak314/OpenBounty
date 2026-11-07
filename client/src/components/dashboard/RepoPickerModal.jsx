@@ -25,7 +25,7 @@ export default function RepoPickerModal({ open, repos, addedIds, onPick, onClose
   const list = repos.filter((r) => `${r.name} ${r.fullName}`.toLowerCase().includes(q.trim().toLowerCase()));
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-ob-navy/40 px-4 pt-[14vh] backdrop-blur-[2px] animate-[pop_.15s_ease-out]" onMouseDown={onClose}>
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-ob-navy/40 px-4 pt-[8vh] backdrop-blur-[2px] animate-[pop_.15s_ease-out] sm:pt-[14vh]" onMouseDown={onClose}>
       <div role="dialog" aria-label="Choose a repository" onMouseDown={(e) => e.stopPropagation()} className="w-full max-w-[460px] rounded-2xl border border-[#e5e7eb] bg-white p-5 shadow-2xl animate-[rise_.2s_ease-out]">
         <div className="flex items-center justify-between">
           <h2 className="font-serif text-[24px] text-ob-navy">Choose a repository</h2>
@@ -36,7 +36,7 @@ export default function RepoPickerModal({ open, repos, addedIds, onPick, onClose
           <input ref={input} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search your repositories" className="min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-ob-slate" />
         </label>
         {error && <p role="alert" className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">{error}</p>}
-        <ul className="mt-3 flex max-h-[320px] flex-col gap-2 overflow-y-auto">
+        <ul className="mt-3 flex max-h-[min(320px,55dvh)] flex-col gap-2 overflow-y-auto">
           {loading && <li className="py-8 text-center text-xs text-ob-slate">Loading your GitHub repositories…</li>}
           {!loading && list.length === 0 && <li className="py-8 text-center text-xs text-ob-slate">{q ? `No repositories match “${q}”.` : "No public repositories found."}</li>}
           {!loading && list.map((repo) => {
@@ -45,7 +45,7 @@ export default function RepoPickerModal({ open, repos, addedIds, onPick, onClose
               <button type="button" disabled={added} onClick={() => onPick(repo)} className="group flex w-full items-center gap-3 rounded-xl border border-transparent p-3 text-left transition-all duration-150 enabled:hover:border-[#e5e7eb] enabled:hover:bg-ob-mist/50 disabled:opacity-50">
                 <span className="flex size-10 shrink-0 items-center justify-center rounded-[12px] bg-ob-mist text-xs font-semibold text-ob-navy">{repo.private ? "Private" : "Git"}</span>
                 <span className="min-w-0 flex-1"><span className="block text-sm font-semibold text-ob-navy">{repo.name}</span><span className="block truncate text-[11px] text-ob-slate">{repo.fullName} · {repo.description}</span></span>
-                <span className="flex items-center gap-1 text-xs font-semibold text-ob-navy">{added ? <><Check {...iconProps} size={14} /> Added</> : <span className="opacity-0 transition-opacity group-hover:opacity-100">Add →</span>}</span>
+                <span className="flex items-center gap-1 text-xs font-semibold text-ob-navy">{added ? <><Check {...iconProps} size={14} /> Added</> : <span className="opacity-0 transition-opacity group-hover:opacity-100 [@media(hover:none)]:opacity-100">Add →</span>}</span>
               </button>
             </li>;
           })}

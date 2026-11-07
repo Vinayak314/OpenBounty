@@ -8,11 +8,13 @@ import SamplesPage from "@/pages/SamplesPage";
 import ReviewDemoPage from "@/pages/ReviewDemoPage";
 import { AuthProvider } from "@/auth/AuthContext";
 import ProtectedRoute from "@/auth/ProtectedRoute";
+import { NavDrawerProvider } from "@/components/layout/NavDrawer";
 
 export default function App() {
   return (
     <AuthProvider>
     <BrowserRouter>
+      <NavDrawerProvider>
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/demo/0g" element={<ReviewDemoPage />} />
@@ -23,6 +25,7 @@ export default function App() {
         <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
         <Route path="/samples" element={<ProtectedRoute><SamplesPage /></ProtectedRoute>} />
       </Routes>
+      </NavDrawerProvider>
     </BrowserRouter>
     </AuthProvider>
   );

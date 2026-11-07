@@ -3,7 +3,7 @@ import flower from "@/assets/wallet/flower.svg";
 
 export default function OnboardingHeader({ helpLink }) {
   return (
-    <header className="flex h-[94px] items-center justify-between border-b border-ob-line bg-white px-[72px]">
+    <header className="flex h-16 items-center justify-between gap-3 border-b border-ob-line bg-white px-4 sm:px-10 md:h-[94px] md:px-[72px]">
       <Link to="/" className="flex items-center gap-[10px]">
         <span className="flex size-[34px] items-center justify-center rounded-full bg-ob-navy">
           <img src={flower} alt="" className="size-[25px]" />

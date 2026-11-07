@@ -1,10 +1,23 @@
 import { Link } from "react-router-dom";
 import { ArrowLeft, ArrowUpRight, Flower2 } from "lucide-react";
 import { VIEWS } from "@/components/project/views";
+import { cn } from "@/lib/utils";
+import { DrawerBackdrop } from "@/components/layout/NavDrawer";
+import { useNavDrawer, useScrollLock } from "@/components/layout/navDrawerState";
 
 export default function ProjectSidebar({ project, view, onView }) {
+  const { panel, close } = useNavDrawer();
+  const open = panel === "nav";
+  useScrollLock(open);
   return (
-    <aside className="flex w-[238px] shrink-0 flex-col overflow-y-auto border-r border-ob-line bg-[#f8fafc] px-5 pb-[30px] pt-[26px]">
+    <>
+    <DrawerBackdrop name="nav" />
+    <aside className={cn(
+      // Phones: slides over the page. From md up it is the fixed column of the desktop layout.
+      "fixed inset-y-0 left-0 z-50 flex w-[238px] max-w-[85vw] shrink-0 flex-col overflow-y-auto border-r border-ob-line bg-[#f8fafc] px-5 pb-[30px] pt-[26px] transition-transform duration-200 ease-out",
+      "md:static md:z-auto md:max-w-none md:translate-x-0",
+      open ? "translate-x-0 shadow-2xl" : "-translate-x-full",
+    )}>
       <Link to="/" className="flex items-center gap-[10px]">
         <span className="flex size-[34px] items-center justify-center rounded-full bg-ob-mist"><Flower2 className="size-[20px] text-ob-navy" strokeWidth={1.6} /></span>
         <span className="font-serif text-[25px] font-bold tracking-[-0.8px] text-ob-navy">OpenBounty</span>
@@ -14,12 +27,13 @@ export default function ProjectSidebar({ project, view, onView }) {
       {project?.repository?.url && <a href={project.repository.url} target="_blank" rel="noreferrer" className="mt-[10px] flex min-w-0 items-center gap-1 text-[11px] text-ob-slate hover:text-ob-navy"><span className="truncate">{project.repository.fullName}</span><ArrowUpRight className="size-3 shrink-0" /></a>}
       <nav className="mt-[26px] flex flex-col gap-1" aria-label="Workspace views">
         {VIEWS.map(({ id, label, icon: Icon }) => (
-          <button key={id} type="button" aria-current={view === id ? "page" : undefined} onClick={() => onView(id)}
-            className={`flex h-[34px] items-center gap-[10px] rounded-[10px] px-[10px] text-left text-[12px] font-semibold transition-colors ${view === id ? "bg-ob-navy text-white" : "text-ob-slate hover:bg-ob-mist hover:text-ob-navy"}`}>
+          <button key={id} type="button" aria-current={view === id ? "page" : undefined} onClick={() => { onView(id); close(); }}
+            className={`flex h-11 items-center gap-[10px] rounded-[10px] px-[10px] text-left md:h-[34px] text-[12px] font-semibold transition-colors ${view === id ? "bg-ob-navy text-white" : "text-ob-slate hover:bg-ob-mist hover:text-ob-navy"}`}>
             <Icon className="size-[15px] shrink-0" strokeWidth={1.8} />{label}
           </button>
         ))}
       </nav>
     </aside>
+    </>
   );
 }

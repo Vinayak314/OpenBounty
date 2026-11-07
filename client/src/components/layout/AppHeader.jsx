@@ -7,22 +7,23 @@ import { useAuth } from "@/auth/AuthContext";
 import WalletBalanceChip from "@/components/wallet/WalletBalanceChip";
 import InitialsAvatar from "./InitialsAvatar";
 import { iconProps } from "./icon";
+import { NavMenuButton } from "./NavDrawer";
 
 const VARIANTS = {
   default: {
-    root: "h-[72px] border-[#e5e7eb] bg-white px-9",
+    root: "h-16 border-[#e5e7eb] bg-white px-4 sm:px-6 md:h-[72px] md:px-9",
     crumbs: "text-[13px] text-[#9ca3af]",
     separator: " / ",
-    utilities: "gap-[18px]",
+    utilities: "sm:gap-[18px]",
     bell: 18,
     bellColor: "text-[#6b7280]",
     avatar: "size-[30px] text-[9.6px]",
   },
   compact: {
-    root: "h-16 border-ob-line bg-[#f8fafc] px-8",
+    root: "h-16 border-ob-line bg-[#f8fafc] px-4 sm:px-6 md:px-8",
     crumbs: "text-xs text-[#94a3b8]",
     separator: "  /  ",
-    utilities: "gap-4",
+    utilities: "sm:gap-4",
     bell: 16,
     bellColor: "text-ob-slate",
     avatar: "size-7 text-[9px]",
@@ -57,27 +58,30 @@ export default function AppHeader({ crumbs, variant = "default" }) {
   }, [open]);
 
   return (
-    <header className={cn("flex shrink-0 items-center justify-between border-b", v.root)}>
-      <p className={cn("whitespace-pre leading-[normal]", v.crumbs)}>
-        {crumbs.map((c, i) => (
-          <span key={`${c}-${i}`}>
-            {i > 0 && v.separator}
-            {i === 0 && crumbs.length > 1 ? (
-              <Link to="/dashboard" className="transition-colors hover:text-ob-navy hover:underline">{c}</Link>
-            ) : (
-              c
-            )}
-          </span>
-        ))}
-      </p>
-      <div className={cn("flex items-center", v.utilities)}>
+    <header className={cn("flex shrink-0 items-center justify-between gap-2 border-b", v.root)}>
+      <div className="flex min-w-0 items-center gap-1">
+        <NavMenuButton />
+        <p className={cn("min-w-0 truncate whitespace-pre leading-[normal]", v.crumbs)}>
+          {crumbs.map((c, i) => (
+            <span key={`${c}-${i}`} className={i === 0 && crumbs.length > 1 ? "hidden sm:inline" : undefined}>
+              {i > 0 && <span className="hidden sm:inline">{v.separator}</span>}
+              {i === 0 && crumbs.length > 1 ? (
+                <Link to="/dashboard" className="transition-colors hover:text-ob-navy hover:underline">{c}</Link>
+              ) : (
+                c
+              )}
+            </span>
+          ))}
+        </p>
+      </div>
+      <div className={cn("flex shrink-0 items-center gap-2", v.utilities)}>
         <WalletBalanceChip />
         {variant === "compact" ? (
-          <span className="text-[11px] font-medium leading-[normal] text-ob-slate">
+          <span className="hidden text-[11px] font-medium leading-[normal] text-ob-slate lg:inline">
             {appNetwork.label}
           </span>
         ) : (
-          <span className="rounded-full bg-[#f3f4f6] px-[9px] py-[5px] text-[10px] font-semibold leading-[normal] text-[#6b7280]">
+          <span className="hidden rounded-full bg-[#f3f4f6] px-[9px] py-[5px] text-[10px] font-semibold leading-[normal] text-[#6b7280] lg:inline">
             {appNetwork.label}
           </span>
         )}
@@ -93,7 +97,7 @@ export default function AppHeader({ crumbs, variant = "default" }) {
             {unread > 0 && <span className="absolute right-1 top-1 size-2 rounded-full bg-orange-500 ring-2 ring-white" />}
           </button>
           {open && (
-            <div className="absolute right-0 top-11 z-40 w-[300px] animate-[pop_.15s_ease-out] rounded-xl border border-[#e5e7eb] bg-white p-2 shadow-xl">
+            <div className="fixed inset-x-3 top-[68px] z-40 animate-[pop_.15s_ease-out] rounded-xl border border-[#e5e7eb] bg-white p-2 shadow-xl sm:absolute sm:inset-x-auto sm:right-0 sm:top-11 sm:w-[300px]">
               <div className="flex items-center justify-between px-2 py-1">
                 <span className="text-xs font-semibold text-ob-navy">Notifications</span>
                 <button type="button" disabled={!unread} onClick={() => setRead(new Set(notifications.map((n) => n.id)))} className="text-[11px] text-ob-slate enabled:hover:text-ob-navy enabled:hover:underline disabled:opacity-50">

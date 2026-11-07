@@ -6,8 +6,8 @@ test USDT. Built with Hardhat (the toolchain already used in this folder), Solid
 > **Status (honest summary).** The escrow and the passkey account contracts compile and pass the local suite
 > (`npx hardhat test`, including tests that drive them with the backend's own signing/encoding modules).
 > Gasless execution is implemented with our own passkey smart accounts plus the OpenBounty gas sponsor (see the root
-> README). The contracts have **not** been deployed, **not** verified on the explorer and **not** audited; deployed
-> addresses below are placeholders until the team deploys.
+> README). Both contracts are **deployed and verified on Whitechain Sepolia** (addresses below) and a funding and a
+> payout transaction in the designated USDT ran through them. They have **not** been audited; use test assets only.
 
 | Item | Value |
 |---|---|
@@ -15,7 +15,7 @@ test USDT. Built with Hardhat (the toolchain already used in this folder), Solid
 | RPC / Explorer | `https://rpc.testnet.whitechain.io` / `https://explorer.testnet.whitechain.io` |
 | Reward token | designated test USDT `0xcedfB56113143d55b2358b8CFbB0dEB5Ad2f55a7` (6 decimals) |
 | Gas token | WBT (test, no value) |
-| Escrow address | `TBD` (placeholder, fill in after deployment, see [Deployed addresses](#deployed-addresses)) |
+| Escrow address | [`0x2DC1E6ecFaB39DB8212439570aBF25a803f37d83`](https://explorer.testnet.whitechain.io/address/0x2DC1E6ecFaB39DB8212439570aBF25a803f37d83#code) (see [Deployed addresses](#deployed-addresses)) |
 
 **Why on-chain stablecoin settlement (ETHGlobal Whitechain README requirement).** A funded bounty reserves the exact
 reward and programmatically restricts release and refunds (one bound claimant, expiry rules, refund rules, a required
@@ -243,13 +243,14 @@ No owner, upgrade or recovery path: losing the passkey loses the account.
 
 | Network | Contract | Address | Tx / explorer link | Verified |
 |---|---|---|---|---|
-| Whitechain Sepolia (1874) | `OpenBountyAccountFactory` | `TBD` | `TBD` | no |
-| Whitechain Sepolia (1874) | `BountyEscrow` | `TBD` | `TBD` | no |
+| Whitechain Sepolia (1874) | `OpenBountyAccountFactory` | `0x167E9A823e918d1994dce7E7BEd241aCc6525437` | [tx `0xe8084fc7…`](https://explorer.testnet.whitechain.io/tx/0xe8084fc7fe48f8a18d1bbb8a757bc531e60c85c40b4a06245c91a7b7e455f673) · [contract](https://explorer.testnet.whitechain.io/address/0x167E9A823e918d1994dce7E7BEd241aCc6525437#code) | yes (Blockscout) |
+| Whitechain Sepolia (1874) | `BountyEscrow` | `0x2DC1E6ecFaB39DB8212439570aBF25a803f37d83` | [tx `0x55754f9a…`](https://explorer.testnet.whitechain.io/tx/0x55754f9a53e4684abacc2ab3a5e5e045db5a153c2ea211b9fb06cc3d625df2a8) · [contract](https://explorer.testnet.whitechain.io/address/0x2DC1E6ecFaB39DB8212439570aBF25a803f37d83#code) | yes (Blockscout) |
 | Whitechain Sepolia (1874) | USDT (designated, external) | `0xcedfB56113143d55b2358b8CFbB0dEB5Ad2f55a7` | [explorer](https://explorer.testnet.whitechain.io/address/0xcedfB56113143d55b2358b8CFbB0dEB5Ad2f55a7) | n/a |
 
-After deploying: commit `deployments/whitechainSepolia.json`, link the settlement transaction here (ETHGlobal's
-Whitechain tracks require a USDT payment settled in the main flow with the explorer link in the README), and attempt
-`npx hardhat verify --network whitechainSepolia --constructor-args-path deployments/whitechainSepolia.args.js <escrow>`.
+Deployment records are in `deployments/whitechainSepolia.json` and `deployments/whitechainSepolia.accounts.json`. The
+funding and payout (settlement) transactions in the designated USDT are linked from the root README. Verification
+command that worked on Blockscout:
+`SOURCIFY=false npx hardhat verify --network whitechainSepolia --constructor-args deployments/whitechainSepolia.args.js <escrow>`.
 
 Gas reference from the local suite (not a Whitechain measurement): `fund` ~203k, `acceptClaim` ~91k,
 `registerSubmission` ~89k, `settle` ~150k, `refund` ~86k, `cancelByAgreement` ~119k.

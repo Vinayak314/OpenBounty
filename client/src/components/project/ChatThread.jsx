@@ -43,7 +43,7 @@ function ActionBtn({ label, onClick, children, danger }) {
       aria-label={label}
       title={label}
       onClick={onClick}
-      className={`rounded-[6px] p-[5px] transition-colors ${danger ? "text-rose-600 hover:bg-rose-50" : "text-ob-slate hover:bg-ob-mist hover:text-ob-navy"}`}
+      className={`rounded-[6px] p-[8px] transition-colors sm:p-[5px] ${danger ? "text-rose-600 hover:bg-rose-50" : "text-ob-slate hover:bg-ob-mist hover:text-ob-navy"}`}
     >
       {children}
     </button>
@@ -75,7 +75,8 @@ function Toolbar({ m, onReact, onReply, onEdit, onDelete }) {
   return (
     <div
       className={`absolute -top-3 z-10 flex items-center gap-[2px] rounded-[10px] border border-ob-line bg-white px-1 py-[2px] shadow-sm transition-opacity ${m.me ? "left-0" : "right-0"} ${
-        picker || confirm ? "opacity-100" : "opacity-0 focus-within:opacity-100 group-hover:opacity-100"
+        // Hidden toolbars must not catch taps: on a phone a tap on the message is what reveals them.
+        picker || confirm ? "opacity-100" : "pointer-events-none opacity-0 focus-within:pointer-events-auto focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100"
       }`}
     >
       {picker ? (
@@ -151,7 +152,7 @@ function Message({ m, actions, onJump }) {
     <div className={`group relative flex items-start gap-[11px] ${m.me ? "flex-row-reverse" : ""}`}>
       {m.status !== "sending" && <Toolbar m={m} {...actions} />}
       {avatar}
-      <div className={`min-w-0 ${m.type === "report" ? "flex-1" : "max-w-[78%]"} ${m.me ? "flex flex-col items-end" : ""}`}>
+      <div className={`min-w-0 ${m.type === "report" ? "flex-1" : "max-w-[88%] sm:max-w-[78%]"} ${m.me ? "flex flex-col items-end" : ""}`}>
         <Byline m={m} />
         {m.replyTo && (
           <button
@@ -274,7 +275,7 @@ export default function ChatThread({ messages, typing, loading, query, onReact, 
 
   return (
     <div className="relative min-h-0 flex-1">
-      <div ref={scroller} onScroll={onScroll} className="h-full overflow-y-auto scroll-smooth px-6 pb-4 pt-[14px]">
+      <div ref={scroller} onScroll={onScroll} className="h-full overflow-y-auto scroll-smooth px-3 pb-4 pt-[14px] sm:px-6">
         <div className="flex flex-col gap-5">
           {messages.length > 0 && <p className="text-center text-[10px] text-ob-slate">{new Date().toLocaleDateString()}</p>}
           {loading && <p className="py-10 text-center text-[12px] text-ob-slate">Loading project messages…</p>}
